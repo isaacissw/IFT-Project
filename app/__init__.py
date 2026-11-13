@@ -47,6 +47,7 @@ def create_app(config_object=Config):
     # CSRF protection, so every POST form must carry a valid token.
     csrf.init_app(app)
 
+
     # The database is MySQL, reached through DATABASE_URL (see .env). Every
     # request opens its own connection through app/db.py.
 

@@ -1,8 +1,113 @@
 {% extends 'base.html' %}
 {% block title %}Administrator Dashboard - Stock Trading System{% endblock %}
 {% block content %}
-<div class="card">
-  <h2>Administrator Dashboard</h2>
-  <p>Signed in as <strong>{{ current_user.username }}</strong>.</p>
+<div class="grid">
+  <section class="card">
+    <h2>Administrator Dashboard</h2>
+    <p>Signed in as <strong>{{ current_user.username }}</strong>.</p>
+  </section>
+
+  <div class="admin-columns">
+    <!-- ================= Create a stock ================= -->
+    <section class="card">
+      <h2>Create New Stock</h2>
+      <form method="post" action="{{ url_for('admin.create_stock') }}" class="auth-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <label for="company_name">Company Name</label>
+        <input type="text" id="company_name" name="company_name" value="{{ stock_values.get('company_name', '') }}" required>
+        {% if stock_errors.get('company_name') %}<p class="field-error">{{ stock_errors['company_name'] }}</p>{% endif %}
+
+        <label for="ticker">Stock Ticker</label>
+        <input type="text" id="ticker" name="ticker" value="{{ stock_values.get('ticker', '') }}" maxlength="5" required>
+        <p class="hint">1-5 letters, for example SSOL. It cannot be changed later.</p>
+        {% if stock_errors.get('ticker') %}<p class="field-error">{{ stock_errors['ticker'] }}</p>{% endif %}
+
+        <label for="shares">Shares Outstanding</label>
+        <input type="number" id="shares" name="shares" min="1" step="1" value="{{ stock_values.get('shares', '') }}" required>
+        {% if stock_errors.get('shares') %}<p class="field-error">{{ stock_errors['shares'] }}</p>{% endif %}
+
+        <label for="price">Initial Price (USD)</label>
+        <input type="number" id="price" name="price" min="0.01" step="0.01" value="{{ stock_values.get('price', '') }}" required>
+        <p class="hint">Only set now. After creation the market decides the price.</p>
+        {% if stock_errors.get('price') %}<p class="field-error">{{ stock_errors['price'] }}</p>{% endif %}
+
+        <label for="description">Description (optional)</label>
+        <textarea id="description" name="description" rows="3">{{ stock_values.get('description', '') }}</textarea>
+        {% if stock_errors.get('description') %}<p class="field-error">{{ stock_errors['description'] }}</p>{% endif %}
+
+        <button type="submit" class="btn btn-primary">Submit New Stock</button>
+      </form>
+    </section>
+
+    <!-- ================= Market hours ================= -->
+    <section class="card">
+      <h2>Market Hours</h2>
+      <p class="market-status">
+        The market is currently
+        <strong class="{{ 'status-open' if market_open else 'status-closed' }}">{{ 'OPEN' if market_open else 'CLOSED' }}</strong>
+        {% if override_mode == 'force_open' %}(manually forced open){% elif override_mode == 'force_closed' %}(manually forced closed){% else %}(following the schedule){% endif %}.
+      </p>
+
+      <form method="post" action="{{ url_for('admin.save_override') }}" class="override-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <fieldset>
+          <legend>Manual Market Override</legend>
+          <label><input type="radio" name="mode" value="none" {{ 'checked' if override_mode == 'none' }}> Automatic (follow the schedule)</label>
+          <label><input type="radio" name="mode" value="force_open" {{ 'checked' if override_mode == 'force_open' }}> Force market OPEN</label>
+          <label><input type="radio" name="mode" value="force_closed" {{ 'checked' if override_mode == 'force_closed' }}> Force market CLOSED</label>
+        </fieldset>
+        <button type="submit" class="btn btn-primary">Save Override</button>
+      </form>
+
+      <form method="post" action="{{ url_for('admin.save_schedule') }}" class="schedule-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h3>Weekly Schedule <span class="hint">(times in {{ tz_name }})</span></h3>
+        <table class="data-table hours-table">
+          <thead><tr><th>Day</th><th>Closed all day</th><th>Opens</th><th>Closes</th></tr></thead>
+          <tbody>
+            {% for row in schedule %}
+            <tr>
+              <td>{{ row.day }}</td>
+              <td><input type="checkbox" name="closed_{{ row.day }}" value="1" {{ 'checked' if row.closed }}></td>
+              <td><input type="time" name="open_{{ row.day }}" value="{{ row.open }}"></td>
+              <td><input type="time" name="close_{{ row.day }}" value="{{ row.close }}"></td>
+            </tr>
+            {% if schedule_errors.get(row.day) %}
+            <tr><td colspan="4" class="field-error">{{ row.day }}: {{ schedule_errors[row.day] }}</td></tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+        <button type="submit" class="btn btn-primary">Save Hours</button>
+      </form>
+    </section>
+  </div>
+
+  <!-- ================= Inventory ================= -->
+  <section class="card">
+    <h2>Stock Inventory</h2>
+    {% if inventory %}
+    <table class="data-table">
+      <thead>
+        <tr><th>Company</th><th>Ticker</th><th>Price</th><th>Shares Outstanding</th><th>Shares Available</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for s in inventory %}
+        <tr>
+          <td>{{ s.company_name }}</td>
+          <td>{{ s.ticker_symbol }}</td>
+          <td>{{ s.current_price | money }}</td>
+          <td>{{ '{:,}'.format(s.company_shares_outstanding) }}</td>
+          <td>{{ '{:,}'.format(s.shares_available) }}</td>
+          <td><a class="btn btn-secondary" href="{{ url_for('admin.edit_stock', stock_id=s.stock_id) }}">Edit</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No stocks yet.</p>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

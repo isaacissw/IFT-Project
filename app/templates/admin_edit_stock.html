@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Edit {{ stock.ticker_symbol }} - Stock Trading System{% endblock %}
+{% block content %}
+<div class="card auth-card">
+  <h2>Edit {{ stock.ticker_symbol }}</h2>
+  <dl class="facts">
+    <dt>Ticker</dt><dd>{{ stock.ticker_symbol }} (cannot be changed)</dd>
+    <dt>Current Price</dt><dd>{{ stock.current_price | money }} (set by the market, not editable)</dd>
+  </dl>
+
+  <form method="post" action="{{ url_for('admin.edit_stock', stock_id=stock.stock_id) }}" class="auth-form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label for="company_name">Company Name</label>
+    <input type="text" id="company_name" name="company_name" value="{{ values.get('company_name', '') }}" required>
+    {% if errors.get('company_name') %}<p class="field-error">{{ errors['company_name'] }}</p>{% endif %}
+
+    <label for="shares">Shares Outstanding</label>
+    <input type="number" id="shares" name="shares" min="1" step="1" value="{{ values.get('shares', '') }}" required>
+    {% if errors.get('shares') %}<p class="field-error">{{ errors['shares'] }}</p>{% endif %}
+
+    <label for="description">Description (optional)</label>
+    <textarea id="description" name="description" rows="3">{{ values.get('description', '') }}</textarea>
+    {% if errors.get('description') %}<p class="field-error">{{ errors['description'] }}</p>{% endif %}
+
+    <button type="submit" class="btn btn-primary">Save Changes</button>
+    <a class="btn btn-secondary" href="{{ url_for('admin.dashboard') }}">Back</a>
+  </form>
+</div>
+{% endblock %}

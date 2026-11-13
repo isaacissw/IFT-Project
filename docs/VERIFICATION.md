@@ -1,5 +1,27 @@
 # Verification record
 
+## Administrator tools (stock inventory, market hours, manual override)
+
+- `pytest -q` -> 392 passed (294 earlier + 98 new in `test_admin_services.py` and `test_admin_routes.py`).
+- Create stock: company name, ticker (1-5 letters, upper-cased, unique), shares outstanding (whole
+  number, 1 to 1,000,000,000), initial price ($0.01 to $1,000,000.00, 2 decimals) and an optional
+  description (up to 2000 chars); every problem is shown at once and nothing is written on error; a new
+  stock can be traded immediately.
+- Edit stock: name, description, shares. The ticker and price cannot be changed, enforced by the shape
+  of the code (no price parameter exists) and tested, including a forged price in the request. Shares
+  cannot go below what customers own (checked under a row lock).
+- Market: per-day hours (open must be before close; or "closed all day", which keeps the stored hours)
+  saved all-or-nothing; manual override none/force_open/force_closed recorded with who and when; forcing
+  the market closed stops customers trading (tested end to end).
+- Access control: only administrators reach `/admin/*`; customers and logged-out visitors are redirected
+  and cannot change anything even with a valid CSRF token; every POST needs a CSRF token; company names
+  are HTML-escaped on every page.
+- Scope decision: company-logo upload was built and then removed on the team's decision (not needed for
+  this project). The unused `stocks.logo_filename` column remains in the schema.
+- Real browser run (before the logo removal, same admin screens): logged in as admin, created a stock,
+  forced the market closed (status line updated).
+- The weekly schedule editor is also how the final switch to the 9-5 weekday schedule can be made
+  (or via the seed file, see CLAUDE.md). The demo market stays open 24/7 until then.
 ## Cash deposits and withdrawals (Financial Records page)
 
 - `pytest -q` -> 294 passed (187 earlier + 107 new: `test_cash.py`, `test_cash_routes.py`,

@@ -35,6 +35,17 @@ body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #f4f6f8
 .nav-links a:hover { text-decoration: underline; }
 .cash-forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
 .trade-form input[type=number] { max-width: 100%; }
+/* Administrator pages */
+.admin-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.25rem; align-items: start; }
+.auth-form textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd2d9; border-radius: 6px; font: inherit; }
+.auth-form input[type=number] { padding: 0.5rem; width: 100%; border: 1px solid #cbd2d9; border-radius: 6px; font-size: 1rem; background: #fff; }
+.market-status { font-size: 1.05rem; }
+.status-open { color: #1b7a3a; }
+.status-closed { color: #a12020; }
+.override-form fieldset { border: 1px solid #d9e2ec; border-radius: 6px; margin: 0.75rem 0; }
+.override-form label { display: block; margin: 0.35rem 0; font-weight: 400; }
+.hours-table input[type=time] { padding: 0.25rem; border: 1px solid #cbd2d9; border-radius: 4px; }
+.schedule-form button { margin-top: 0.75rem; }
 /* Login / signup / logout */
 .logout-form { display: inline; margin-left: 1rem; }
 .auth-card { max-width: 440px; margin: 0 auto; }

@@ -942,3 +942,77 @@ def reduce_holding(conn, user_id, stock_id, quantity, now):
             "UPDATE holdings SET quantity = ?, updated_at = ? WHERE user_id = ? AND stock_id = ?",
             (new_quantity, now, user_id, stock_id),
         )
+
+
+# ---------------------------------------------------------------------------
+# Administrator functions: stock inventory and market controls
+#
+# Note what is NOT here: nothing in this section can change a stock's price.
+# The SAD says an administrator sets the price only when the stock is created
+# (insert_stock); after that only the system's price generator changes it.
+# ---------------------------------------------------------------------------
+
+
+def get_stock_by_ticker(conn, ticker_symbol):
+    """Return one stock row by ticker symbol, or None."""
+    cur = conn.execute(
+        "SELECT * FROM stocks WHERE ticker_symbol = ?",
+        (ticker_symbol,),
+    )
+    return cur.fetchone()
+
+
+def update_stock_details(conn, stock_id, company_name, description, shares_outstanding):
+    """Change a stock's editable details. There is deliberately no price parameter.
+
+    ``description`` may be None. The ticker symbol and the price are never
+    changed here.
+    """
+    conn.execute(
+        """
+        UPDATE stocks
+        SET company_name = ?, description = ?, company_shares_outstanding = ?
+        WHERE stock_id = ?
+        """,
+        (company_name, description, shares_outstanding, stock_id),
+    )
+
+
+def list_market_schedule(conn):
+    """Return the seven market_schedule rows in calendar order (Monday first)."""
+    cur = conn.execute(
+        """
+        SELECT * FROM market_schedule
+        ORDER BY FIELD(day_of_week, 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+                       'Friday', 'Saturday', 'Sunday')
+        """
+    )
+    return cur.fetchall()
+
+
+def set_day_hours(conn, day_of_week, open_time, close_time, updated_at):
+    """Open a weekday between two 'HH:MM:SS' times (and clear its closed-all-day flag)."""
+    conn.execute(
+        """
+        UPDATE market_schedule
+        SET market_open_time = ?, market_close_time = ?, is_holiday = 0, updated_at = ?
+        WHERE day_of_week = ?
+        """,
+        (open_time, close_time, _ts(updated_at), day_of_week),
+    )
+
+
+def set_day_closed(conn, day_of_week, updated_at):
+    """Mark a weekday closed all day (is_holiday = 1), keeping its stored hours."""
+    conn.execute(
+        "UPDATE market_schedule SET is_holiday = 1, updated_at = ? WHERE day_of_week = ?",
+        (_ts(updated_at), day_of_week),
+    )
+
+
+def set_market_override(conn, override_mode, updated_by, updated_at):
+    """Set the manual market override: 'none', 'force_open' or 'force_closed'."""
+    conn.execute(
+        "UPDATE market_settings SET override_mode = ?, updated_by = ?, updated_at = ? WHERE setting_id = ?",
+        (override_mode, updated_by, _ts(updated_at), 1),
+    )

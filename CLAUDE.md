@@ -39,7 +39,12 @@ Run: `.venv\Scripts\Activate.ps1`, `flask --app app init-db`, `flask --app app r
 This folder (`StockTradingApp`) is the real build. It started as a copy of Kiro's output (buy AND sell on
 SQLite) and has been moved to MySQL. Done: MySQL switch, buy/sell tests, login + signup + logout with
 customer/admin roles, cash deposit/withdraw + Financial Records page (includes transaction history).
-Remaining work, in order: admin tools (create stock with logo/description, market hours + override toggle),
-price generator, trade modal (Buy/Sell selector + live total), AWS deployment, then the 9-5 seed switch.
+admin tools (create/edit stock, weekly hours, manual override; routes in `app/routes/admin.py`, rules in
+`app/services/admin.py`). Company logos were deliberately DROPPED from scope (team decision); the unused
+`stocks.logo_filename` column stays in the schema, always NULL.
+Remaining work, in order: price generator (the ONLY thing that may change a price after creation: it will
+need its own db function and a test that nothing else writes `current_price`), trade modal (Buy/Sell
+selector + live total), AWS deployment,
+then the 9-5 seed switch.
 Auth notes: `app/routes/auth.py` loads `g.current_user` each request; guard blueprints with
 `require_role(...)` in a `before_request`. Tests: `client` = logged-in trainee1, `admin_client`, `anon_client`. Claude Code is the builder from here; Kiro is no longer used on this folder.

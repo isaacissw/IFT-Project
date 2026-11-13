@@ -6,7 +6,8 @@ stocks are simulated. Built with Flask, Jinja2 and MySQL 8.
 
 Currently built: signup, login and logout (customer and administrator roles), buy and sell
 flows, cash deposits and withdrawals with a Financial Records page (balance and transaction
-history), dashboard, market-hours check (with override), and the full database schema. See `docs/` for the SAD and the project rules.
+history), administrator tools (create/edit stocks, weekly market hours, manual
+open/close override), dashboard, market-hours check, and the full database schema. See `docs/` for the SAD and the project rules.
 
 ## Requirements
 
