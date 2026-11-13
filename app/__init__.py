@@ -14,6 +14,7 @@ from flask import Flask, current_app, g
 from flask.cli import with_appcontext
 from flask_wtf.csrf import CSRFProtect
 
+from .cli import run_price_generator_command
 from .config import Config
 from . import db as db_module
 from .routes.admin import bp as admin_bp
@@ -56,6 +57,7 @@ def create_app(config_object=Config):
     app.register_blueprint(cash_bp)
     app.register_blueprint(admin_bp)
     app.cli.add_command(init_db_command)
+    app.cli.add_command(run_price_generator_command)
 
     @app.errorhandler(404)
     def _not_found(error):

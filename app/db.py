@@ -1016,3 +1016,21 @@ def set_market_override(conn, override_mode, updated_by, updated_at):
         "UPDATE market_settings SET override_mode = ?, updated_by = ?, updated_at = ? WHERE setting_id = ?",
         (override_mode, updated_by, _ts(updated_at), 1),
     )
+
+
+# ---------------------------------------------------------------------------
+# Price generator: the ONE function that changes a stock's price after creation
+#
+# The SAD says an administrator sets only the INITIAL price (insert_stock) and
+# afterwards only the system's price generator moves it. This is that single
+# writer. tests/test_price_rules.py fails if any other SQL changes
+# stocks.current_price, or if anything but app/services/pricing.py calls this.
+# ---------------------------------------------------------------------------
+
+
+def update_stock_price(conn, stock_id, new_price, updated_at):
+    """Set a stock's new market price (a Decimal computed in Python) and stamp when it changed."""
+    conn.execute(
+        "UPDATE stocks SET current_price = ?, price_updated_at = ? WHERE stock_id = ?",
+        (new_price, _ts(updated_at), stock_id),
+    )

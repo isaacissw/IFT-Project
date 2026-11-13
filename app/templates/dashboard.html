@@ -5,7 +5,7 @@
     <h2>Available Stocks</h2>
     <table class="data-table">
       <thead>
-        <tr><th>Company Name</th><th>Ticker</th><th>Current Market Price</th><th>Shares Available</th><th></th></tr>
+        <tr><th>Company Name</th><th>Ticker</th><th>Current Market Price</th><th>Price Updated ({{ tz_name }})</th><th>Shares Available</th><th></th></tr>
       </thead>
       <tbody>
         {% for s in stocks %}
@@ -13,6 +13,7 @@
           <td>{{ s.company_name }}</td>
           <td>{{ s.ticker_symbol }}</td>
           <td>{{ s.current_price | money }}</td>
+          <td>{{ s.price_updated_at | et_datetime(tz_name) }}</td>
           <td>{{ '{:,}'.format(s.shares_available) }}</td>
           <td><a class="btn trade-btn" href="{{ url_for('trading.trade', stock_id=s.stock_id) }}" data-stock-id="{{ s.stock_id }}">Trade</a></td>
         </tr>

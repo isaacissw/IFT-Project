@@ -17,6 +17,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _positive_int(name, default):
+    """Read a whole-number setting from the environment, with a clear error if it is not one."""
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise RuntimeError(f"{name} must be a whole number of 1 or more (got {raw!r}).")
+    return value
+
+
 class Config:
     """Flask configuration object built from environment variables.
 
@@ -40,6 +54,11 @@ class Config:
     # Time zone used only for displaying timestamps. Defaults to US Eastern,
     # matching the SAD wireframe. Interpreted with zoneinfo.
     MARKET_TIMEZONE = os.environ.get("MARKET_TIMEZONE", "America/New_York")
+
+    # Price generator: seconds between price updates, and the largest single
+    # move in basis points (50 = 0.5%). Both optional.
+    PRICE_TICK_SECONDS = _positive_int("PRICE_TICK_SECONDS", 60)
+    PRICE_MAX_STEP_BPS = _positive_int("PRICE_MAX_STEP_BPS", 50)
 
     # Seed passwords, read by seed.py and stored only as Werkzeug hashes.
     SEED_ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD")

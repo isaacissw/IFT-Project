@@ -42,9 +42,9 @@ customer/admin roles, cash deposit/withdraw + Financial Records page (includes t
 admin tools (create/edit stock, weekly hours, manual override; routes in `app/routes/admin.py`, rules in
 `app/services/admin.py`). Company logos were deliberately DROPPED from scope (team decision); the unused
 `stocks.logo_filename` column stays in the schema, always NULL.
-Remaining work, in order: price generator (the ONLY thing that may change a price after creation: it will
-need its own db function and a test that nothing else writes `current_price`), trade modal (Buy/Sell
-selector + live total), AWS deployment,
-then the 9-5 seed switch.
+Price generator done: `app/services/pricing.py` + `flask --app app run-price-generator` (`app/cli.py`). It is
+the ONLY writer of a price after creation (`db.update_stock_price`); tests/test_price_rules.py enforces this.
+Remaining work, in order: trade modal (Buy/Sell selector + live total), AWS deployment (run the generator
+as its own service, e.g. systemd, next to gunicorn), then the 9-5 seed switch.
 Auth notes: `app/routes/auth.py` loads `g.current_user` each request; guard blueprints with
 `require_role(...)` in a `before_request`. Tests: `client` = logged-in trainee1, `admin_client`, `anon_client`. Claude Code is the builder from here; Kiro is no longer used on this folder.

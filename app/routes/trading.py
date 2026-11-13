@@ -85,6 +85,7 @@ def dashboard():
                     "stock_id": s["stock_id"],
                     "company_name": s["company_name"],
                     "ticker_symbol": s["ticker_symbol"],
+                    "price_updated_at": s["price_updated_at"],
                     "current_price": to_money(s["current_price"]),
                     "shares_available": int(s["company_shares_outstanding"]) - held,
                 }

@@ -1,5 +1,27 @@
 # Verification record
 
+## Random price generator (SAD process map #8)
+
+- `pytest -q` -> 454 passed (392 earlier + 62 new: `test_pricing.py`, `test_price_rules.py`,
+  `test_price_generator_cli.py`).
+- Each update moves every price by a random whole number of basis points between -50 and +50 (0.5%),
+  exact Decimal math rounded to the cent; a cheap stock still moves by a cent; never below $0.01 or
+  above the column maximum. Property test: for ANY price and step the result is valid and the move
+  is at most 0.5% + 1 cent.
+- Market closed (schedule, weekend, or forced closed) -> nothing in the database changes, not even
+  the update time. Forced open -> prices move even on a closed day.
+- `price_updated_at` is recorded on every update and shown on the customer dashboard.
+- Only the generator can change a price after creation: one db function (`update_stock_price`) and
+  source scans prove no other SQL or caller touches `current_price`. Mutation check: planting a rogue
+  price write in `app/routes/admin.py` made 2 rule tests fail; removed again.
+- Trading interplay: an order reviewed before a price move must be reviewed again (PriceChangedError,
+  nothing charged); a tick racing a confirm in parallel never charges a wrong amount (8 rounds).
+- Runs as its own process: `flask --app app run-price-generator [--once] [--seconds N] [--step-bps N]
+  [--seed N]`; a failed update (e.g. database down) is reported and retried; Ctrl+C stops cleanly.
+- Bug found while testing and fixed: the loop captured `time.sleep` when it was defined, so a test
+  could not stop it and the test run hung. It now looks the sleep function up when it runs.
+- Real run: generator every 3 s next to `flask run`; the dashboard showed e.g. SSOL $42.61 -> $42.47,
+  MESA $308.45 -> $310.61 within 7 seconds, with the update time changing.
 ## Administrator tools (stock inventory, market hours, manual override)
 
 - `pytest -q` -> 392 passed (294 earlier + 98 new in `test_admin_services.py` and `test_admin_routes.py`).

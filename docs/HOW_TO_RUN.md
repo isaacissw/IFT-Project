@@ -90,7 +90,25 @@ MySQL Server must be running. Press the Windows key, type **Services**, open it,
      try a trade: "Market Closed". Set it back to **Automatic**. In **Weekly Schedule** you can set
      each day's opening/closing time or tick **Closed all day**, then **Save Hours**.
 
-10. **Stop the server:** click in the terminal and press **Ctrl+C**.
+10. **Watch prices move (the price generator):** open a SECOND terminal (Terminal > New Terminal)
+    and run:
+
+    ```powershell
+    .\.venv\Scripts\python.exe -m flask --app app run-price-generator
+    ```
+
+    Every 60 seconds it moves each price up or down by at most 0.5% (only while the market is open;
+    it prints "market CLOSED: prices held" otherwise). Refresh the dashboard to see new prices and the
+    **Price Updated** time. Handy for demos:
+    - `--seconds 5` updates every 5 seconds instead of every minute.
+    - `--once` does one update and exits (run it whenever you want prices to change).
+    - `--seed 42` makes the random moves repeatable.
+
+    If prices change between your review screen and **Confirm**, the app says the price changed and
+    asks you to review again. That is the intended safety rule, not a bug. For a calm demo, stop the
+    generator (Ctrl+C) while you click through a trade.
+
+11. **Stop everything:** click in each terminal and press **Ctrl+C**.
 
 ## C. Look at the data in MySQL Workbench
 
