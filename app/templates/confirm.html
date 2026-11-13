@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card confirm-card">
+  {% set is_sell = (mode == 'sell') %}
+  <h2>Confirm Your {{ 'Sale' if is_sell else 'Purchase' }}</h2>
+  <dl class="facts">
+    <dt>Company</dt><dd>{{ company_name }} ({{ ticker_symbol }})</dd>
+    <dt>Quantity</dt><dd>{{ '{:,}'.format(quantity) }} shares</dd>
+    <dt>Price per Share</dt><dd>{{ price_per_share | money }}</dd>
+    <dt>{{ 'Total Proceeds' if is_sell else 'Total Cost' }}</dt><dd>{{ total_cost | money }}</dd>
+    <dt>Cash Balance Now</dt><dd>{{ cash_before | money }}</dd>
+    <dt>Cash Balance After</dt><dd>{{ cash_after | money }}</dd>
+  </dl>
+  <p class="notice">Once confirmed, this transaction cannot be cancelled.</p>
+  <div class="confirm-actions">
+    <form method="post" action="{{ url_for('trading.sell_confirm') if is_sell else url_for('trading.buy_confirm') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="transaction_id" value="{{ transaction_id }}">
+      <button type="submit" class="btn btn-primary">Confirm Transaction</button>
+    </form>
+    <form method="post" action="{{ url_for('trading.sell_cancel') if is_sell else url_for('trading.buy_cancel') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="transaction_id" value="{{ transaction_id }}">
+      <button type="submit" class="btn btn-secondary">Cancel</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

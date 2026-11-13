@@ -1,0 +1,13 @@
+# Local environment / secrets (only .env.example is committed)
+.env
+
+# SQLite database and instance folder
+instance/
+*.db
+
+# Python bytecode and virtual environment
+__pycache__/
+.venv/
+
+.hypothesis/
+.pytest_cache/

@@ -1,0 +1,32 @@
+# Stock Trading System (IFT 401 capstone)
+
+Simulated stock-market web app. Customers (trainee brokers) buy/sell simulated stocks;
+admins manage stocks and market hours. Source of truth is the SAD (put it at `docs/SAD.pdf`).
+The full standing rules are in `docs/project-rules.md` (copied from Kiro) — read them before changing code.
+NOTE: MySQL 8 is REQUIRED for the final version (team decision), so the SQLite-only parts of the rules are
+being replaced by MySQL. Kiro's original files stay in `C:\Users\sjr_c\Documents\401Project` (read-only reference).
+
+## About the user
+Student, not a strong programmer. Build ONE feature at a time, explain changes briefly in plain
+language, and add short "why" comments only in tricky spots (transactions, Decimal, locking).
+Stop and summarize after each feature; wait for approval before the next one.
+
+## Stack (fixed)
+Python 3.14, Flask 3 app factory + Blueprints, Jinja2 templates, plain CSS/JS (no frameworks, no ORM,
+no migrations), sqlite3 locally, MySQL 8 (pymysql) on AWS later, pytest (+ hypothesis).
+Run: `.venv\Scripts\Activate.ps1`, `flask --app app init-db`, `flask --app app run`, `pytest -q`.
+
+## Non-negotiable rules
+- ALL SQL lives in `app/db.py`; parameterized only (`?`), never f-strings/concat.
+- Money is `Decimal` from strings, never float; no money math inside SQL.
+- Services (`app/services/`) never import Flask; routes stay thin.
+- Multi-step changes run in one `BEGIN IMMEDIATE` transaction; re-validate at commit time.
+- `transactions` rows that are confirmed/executed are never updated or deleted.
+- CSRF on every POST; POST-Redirect-GET after state changes; pages work without JS.
+- Every feature ships with tests; full suite must pass. Record evidence in `docs/VERIFICATION.md`.
+- Tables are exactly: users, stocks, holdings, transactions, market_schedule, market_settings.
+  No other schema changes without asking.
+
+## Status
+This folder (`StockTradingApp`) is the real build. It started as a copy of Kiro's output, which already has
+buy AND sell working on SQLite. Claude Code is the builder from here; Kiro is no longer used on this folder.

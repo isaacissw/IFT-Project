@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid">
+  <section class="card">
+    <h2>Available Stocks</h2>
+    <table class="data-table">
+      <thead>
+        <tr><th>Company Name</th><th>Ticker</th><th>Current Market Price</th><th>Shares Available</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for s in stocks %}
+        <tr>
+          <td>{{ s.company_name }}</td>
+          <td>{{ s.ticker_symbol }}</td>
+          <td>{{ s.current_price | money }}</td>
+          <td>{{ '{:,}'.format(s.shares_available) }}</td>
+          <td><a class="btn trade-btn" href="{{ url_for('trading.trade', stock_id=s.stock_id) }}" data-stock-id="{{ s.stock_id }}">Trade</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>My Portfolio</h2>
+    {% if holdings %}
+    <table class="data-table">
+      <thead>
+        <tr><th>Company Name</th><th>Ticker</th><th>Shares</th><th>Current Price</th><th>Market Value</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for h in holdings %}
+        <tr>
+          <td>{{ h.company_name }}</td>
+          <td>{{ h.ticker_symbol }}</td>
+          <td>{{ '{:,}'.format(h.quantity) }}</td>
+          <td>{{ h.current_price | money }}</td>
+          <td>{{ h.market_value | money }}</td>
+          <td><a class="btn btn-secondary" href="{{ url_for('trading.trade', stock_id=h.stock_id, mode='sell') }}">Sell</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">You don't own any stocks yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Recent Transactions</h2>
+    {% if recent %}
+    <table class="data-table">
+      <thead>
+        <tr><th>Date/Time ({{ tz_name }})</th><th>Ticker</th><th>Type</th><th>Shares</th><th>Price</th><th>Total</th></tr>
+      </thead>
+      <tbody>
+        {% for t in recent %}
+        <tr>
+          <td>{{ t['executed_at'] | et_datetime(tz_name) }}</td>
+          <td>{{ t['ticker_symbol'] }}</td>
+          <td>{{ t['transaction_type'] }}</td>
+          <td>{{ t['quantity'] }}</td>
+          <td>{{ t['price_per_share'] | money }}</td>
+          <td>{{ t['total_amount'] | money }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No transactions yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

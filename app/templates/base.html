@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Stock Trading System{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <nav class="topnav">
+    <span class="brand">Stock Trading System</span>
+    <span class="nav-stats">
+      <span class="stat">Cash Balance: <strong>{{ cash_balance | money }}</strong></span>
+      <span class="stat">Portfolio Value: <strong>{{ portfolio_value | money }}</strong></span>
+    </span>
+  </nav>
+  <main class="container">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flashes">
+          {% for category, text in messages %}
+            <div class="flash flash-{{ category }}">{{ text }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

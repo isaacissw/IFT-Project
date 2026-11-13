@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card trade-card">
+  <h2>Trade {{ company_name }} ({{ ticker_symbol }})</h2>
+
+  <div class="mode-toggle">
+    <a class="btn {{ 'btn-primary' if mode == 'buy' else 'btn-secondary' }}" href="{{ url_for('trading.trade', stock_id=stock_id, mode='buy') }}">Buy</a>
+    <a class="btn {{ 'btn-primary' if mode == 'sell' else 'btn-secondary' }}" href="{{ url_for('trading.trade', stock_id=stock_id, mode='sell') }}">Sell</a>
+  </div>
+
+  {% if error %}
+    {% include '_error_box.html' %}
+  {% endif %}
+
+  <dl class="facts">
+    <dt>Current Price</dt><dd data-price="{{ current_price }}">{{ current_price | money }}</dd>
+    {% if mode == 'sell' %}
+    <dt>You Own</dt><dd>{{ '{:,}'.format(owned_shares) }} shares</dd>
+    {% else %}
+    <dt>Shares Available</dt><dd>{{ '{:,}'.format(shares_available) }}</dd>
+    {% endif %}
+    <dt>Your Cash</dt><dd>{{ cash_balance | money }}</dd>
+  </dl>
+
+  {% if mode == 'sell' %}
+  <form method="post" action="{{ url_for('trading.sell_review') }}" class="trade-form">
+  {% else %}
+  <form method="post" action="{{ url_for('trading.buy_review') }}" class="trade-form">
+  {% endif %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="stock_id" value="{{ stock_id }}">
+    <label for="quantity">Quantity (shares)</label>
+    <input type="number" id="quantity" name="quantity" min="1" step="1" value="{{ quantity }}" required>
+    <p class="estimate">{{ 'Estimated Proceeds' if mode == 'sell' else 'Estimated Total' }}: <span id="estimate">--</span></p>
+    <button type="submit" class="btn btn-primary">Review Order</button>
+    <a class="btn btn-secondary" href="{{ url_for('trading.dashboard') }}">Back</a>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/trade.js') }}"></script>
+{% endblock %}
