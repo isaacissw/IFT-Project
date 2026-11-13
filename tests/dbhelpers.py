@@ -22,8 +22,10 @@ from app import db
 from app.config import Config  # importing Config also loads .env
 
 # Throwaway passwords so the seed loader can hash something. Not real secrets.
-os.environ.setdefault("SEED_ADMIN_PASSWORD", "test-admin-password-not-real")
-os.environ.setdefault("SEED_CUSTOMER_PASSWORD", "test-customer-password-not-real")
+ADMIN_PASSWORD = "test-admin-password-not-real"
+CUSTOMER_PASSWORD = "test-customer-password-not-real"
+os.environ.setdefault("SEED_ADMIN_PASSWORD", ADMIN_PASSWORD)
+os.environ.setdefault("SEED_CUSTOMER_PASSWORD", CUSTOMER_PASSWORD)
 
 _schema_ready = False
 

@@ -4,8 +4,8 @@ Routes are deliberately thin. Each one parses request input, calls exactly one
 service function, and then renders a template or issues a redirect. No SQL and
 no business rules live here -- those are in app/db.py and app/services/*.
 
-The current user's identity always comes from the server (the fixed demo user
-for Phase 1), never from a form field or URL parameter.
+The current user's identity always comes from the server-side session (see
+app/routes/auth.py), never from a form field or URL parameter.
 """
 
 from decimal import Decimal
@@ -15,6 +15,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    g,
     redirect,
     render_template,
     request,
@@ -24,6 +25,7 @@ from flask import (
 from app import db
 from app.clock import now_utc
 from app.money import format_money, to_money
+from app.routes.auth import require_role
 from app.services import trading
 from app.services.trading import (
     InsufficientFundsError,
@@ -36,21 +38,20 @@ from app.services.trading import (
 bp = Blueprint("trading", __name__)
 
 
-def get_current_user_id():
-    """Resolve the current user's id from the server session/config only.
+@bp.before_request
+def _customers_only():
+    """Every trading page needs a logged-in customer (see app/routes/auth.py)."""
+    return require_role("customer")
 
-    Phase 1 has no login, so this returns the fixed demo customer's id that the
-    application factory resolved at startup (from DEMO_USER_ID or by looking up
-    username ``trainee1``). This is the single identity seam: Phase 3 swaps in a
-    real session by changing only this function. The id is never read from a
-    form field or URL.
+
+def get_current_user_id():
+    """The logged-in customer's id, taken from the server-side session only.
+
+    This is the single identity seam: it is never read from a form field or a
+    URL. The ``_customers_only`` guard above has already made sure someone is
+    logged in as a customer before any route in this file runs.
     """
-    user_id = current_app.config.get("RESOLVED_DEMO_USER_ID")
-    if user_id is None:
-        # The before_request hook resolves this lazily; if it is still unset the
-        # database has not been initialized/seeded yet.
-        abort(500, "Demo user is not resolved. Run 'flask --app app init-db'.")
-    return user_id
+    return g.current_user["user_id"]
 
 
 def _tz_name():

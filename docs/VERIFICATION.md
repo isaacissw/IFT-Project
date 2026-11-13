@@ -1,5 +1,18 @@
 # Verification record
 
+## Login, signup and logout
+
+- `pytest -q` -> 187 passed (119 earlier + 68 new in `tests/test_auth.py`, plus updated route tests).
+- Rules enforced and tested: passwords stored only as salted hashes; failed login gives one generic
+  message whether the username or password was wrong; session cookie is HttpOnly + SameSite=Lax;
+  every POST (including login, signup, logout) needs a CSRF token; logged-out visitors are sent to
+  `/login` and cannot trade even with a valid token; customers cannot open `/admin`; administrators
+  cannot trade; a deactivated account is logged out on its next request; signup always creates a
+  customer with $0.00 cash and a creation timestamp; SQL-injection text in login fields is harmless.
+- Real browser run against `flask run`: signup -> auto-login -> dashboard with welcome message;
+  logout; wrong password -> "Invalid username or password." (HTTP 401); correct password -> dashboard.
+- Not built yet (noted for later): rate-limiting/lockout after repeated failed logins, password reset.
+
 ## Test coverage added (buy, sell, rollback, routes, CSRF, SQL safety)
 
 - `pytest -q` -> 112 passed (38 earlier + 74 new) against the MySQL test database.

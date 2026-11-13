@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Create account - Stock Trading System{% endblock %}
+{% block content %}
+<div class="card auth-card">
+  <h2>Create an account</h2>
+  <form method="post" action="{{ url_for('auth.signup') }}" class="auth-form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label for="first_name">First name</label>
+    <input type="text" id="first_name" name="first_name" value="{{ values.get('first_name', '') }}" required autocomplete="given-name">
+    {% if errors.get('first_name') %}<p class="field-error">{{ errors['first_name'] }}</p>{% endif %}
+
+    <label for="last_name">Last name</label>
+    <input type="text" id="last_name" name="last_name" value="{{ values.get('last_name', '') }}" required autocomplete="family-name">
+    {% if errors.get('last_name') %}<p class="field-error">{{ errors['last_name'] }}</p>{% endif %}
+
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" value="{{ values.get('email', '') }}" required autocomplete="email">
+    {% if errors.get('email') %}<p class="field-error">{{ errors['email'] }}</p>{% endif %}
+
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" value="{{ values.get('username', '') }}" required autocomplete="username">
+    <p class="hint">3-30 characters: letters, numbers and underscores.</p>
+    {% if errors.get('username') %}<p class="field-error">{{ errors['username'] }}</p>{% endif %}
+
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" required autocomplete="new-password">
+    <p class="hint">At least 8 characters, with a letter and a number.</p>
+    {% if errors.get('password') %}<p class="field-error">{{ errors['password'] }}</p>{% endif %}
+
+    <label for="confirm_password">Confirm password</label>
+    <input type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password">
+    {% if errors.get('confirm_password') %}<p class="field-error">{{ errors['confirm_password'] }}</p>{% endif %}
+
+    <button type="submit" class="btn btn-primary">Create account</button>
+  </form>
+  <p class="auth-alt">Already have an account? <a href="{{ url_for('auth.login') }}">Log in</a></p>
+</div>
+{% endblock %}

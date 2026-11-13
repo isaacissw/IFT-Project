@@ -4,8 +4,8 @@ A simulated stock-market web application for training new stockbrokers (IFT 401)
 Customers buy and sell simulated stocks with a review-then-confirm flow; all money and
 stocks are simulated. Built with Flask, Jinja2 and MySQL 8.
 
-Currently built: buy and sell flows, dashboard, market-hours check (with override), and
-the full database schema. See `docs/` for the SAD and the project rules.
+Currently built: signup, login and logout (customer and administrator roles), buy and sell
+flows, dashboard, market-hours check (with override), and the full database schema. See `docs/` for the SAD and the project rules.
 
 ## Requirements
 
@@ -61,8 +61,10 @@ flask --app app init-db
 flask --app app run
 ```
 
-Open http://127.0.0.1:5000. Until login is built, the app acts as the demo customer
-`trainee1`.
+Open http://127.0.0.1:5000. You will be sent to the login page. `init-db` creates two demo
+accounts: the customer `trainee1` (password = `SEED_CUSTOMER_PASSWORD` from your `.env`) and the
+administrator `admin` (password = `SEED_ADMIN_PASSWORD`). New customers can also sign up at
+`/signup`; they start with $0.00.
 
 ## Test
 

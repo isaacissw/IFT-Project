@@ -21,7 +21,8 @@ explicit ``now`` and never depend on the wall clock.
 import pytest
 from hypothesis import settings
 
-from dbhelpers import fresh_db, test_database_url
+from app import db
+from dbhelpers import ADMIN_PASSWORD, CUSTOMER_PASSWORD, fresh_db, test_database_url
 
 # Hypothesis normally fails an example that takes over 200 ms. A real MySQL
 # database is slower than the old in-memory one, so a slow example is not a bug.
@@ -31,8 +32,8 @@ settings.load_profile("mysql")
 
 # Obviously-fake, non-secret placeholder passwords used only so ``seed_into``
 # can compute a Werkzeug hash for the two demo users during tests.
-_FAKE_SEED_ADMIN_PASSWORD = "test-admin-password-not-real"
-_FAKE_SEED_CUSTOMER_PASSWORD = "test-customer-password-not-real"
+_FAKE_SEED_ADMIN_PASSWORD = ADMIN_PASSWORD
+_FAKE_SEED_CUSTOMER_PASSWORD = CUSTOMER_PASSWORD
 
 
 def _set_fake_seed_passwords(monkeypatch):
@@ -88,7 +89,36 @@ def app(monkeypatch):
     return flask_app
 
 
+def _client_logged_in_as(app, username):
+    """A test client whose session already says it is ``username`` (skips the slow password check).
+
+    The real login form is tested in tests/test_auth.py; the other route tests just need
+    to be "someone who is already logged in".
+    """
+    conn = db.get_connection(test_database_url())
+    try:
+        user_id = db.get_user_by_username(conn, username)["user_id"]
+    finally:
+        conn.close()
+    test_client = app.test_client()
+    with test_client.session_transaction() as session:
+        session["user_id"] = user_id
+    return test_client
+
+
 @pytest.fixture
 def client(app):
-    """The Flask test client for the CSRF-enabled ``app``."""
+    """A CSRF-enabled test client already logged in as the demo customer ``trainee1``."""
+    return _client_logged_in_as(app, "trainee1")
+
+
+@pytest.fixture
+def admin_client(app):
+    """A CSRF-enabled test client already logged in as the administrator."""
+    return _client_logged_in_as(app, "admin")
+
+
+@pytest.fixture
+def anon_client(app):
+    """A CSRF-enabled test client that is NOT logged in."""
     return app.test_client()

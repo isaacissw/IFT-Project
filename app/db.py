@@ -84,6 +84,10 @@ def _ts(iso_text):
 # ---------------------------------------------------------------------------
 
 
+class DuplicateError(Exception):
+    """An INSERT/UPDATE broke a UNIQUE rule (e.g. the username or email already exists)."""
+
+
 class Connection:
     """Thin wrapper around a PyMySQL connection.
 
@@ -98,9 +102,20 @@ class Connection:
         self._raw = raw
 
     def execute(self, sql, params=()):
-        """Run one statement and return the cursor (fetchone/fetchall/rowcount/lastrowid)."""
+        """Run one statement and return the cursor (fetchone/fetchall/rowcount/lastrowid).
+
+        A "duplicate value for a UNIQUE column" error (MySQL error 1062) is
+        re-raised as ``DuplicateError`` so services can react to it (for example
+        two people signing up with the same username at the same moment) without
+        importing the database driver.
+        """
         cur = self._raw.cursor()
-        cur.execute(sql.replace("?", "%s"), tuple(params))
+        try:
+            cur.execute(sql.replace("?", "%s"), tuple(params))
+        except pymysql.err.IntegrityError as exc:
+            if exc.args and exc.args[0] == 1062:
+                raise DuplicateError(str(exc)) from exc
+            raise
         return cur
 
     def close(self):
@@ -281,6 +296,15 @@ def get_user_by_username(conn, username):
     cur = conn.execute(
         "SELECT * FROM users WHERE username = ?",
         (username,),
+    )
+    return cur.fetchone()
+
+
+def get_user_by_email(conn, email):
+    """Return one user row by email, or None. (MySQL compares emails case-insensitively.)"""
+    cur = conn.execute(
+        "SELECT * FROM users WHERE email = ?",
+        (email,),
     )
     return cur.fetchone()
 

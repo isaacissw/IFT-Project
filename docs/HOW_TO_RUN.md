@@ -40,9 +40,16 @@ MySQL Server must be running. Press the Windows key, type **Services**, open it,
 
    Leave this terminal open. You should see `Running on http://127.0.0.1:5000`.
 
-3. **Open the site:** go to http://127.0.0.1:5000 in your browser.
+3. **Open the site:** go to http://127.0.0.1:5000 in your browser. You land on the login page.
 
-4. **Try a purchase:**
+4. **Log in** (or create your own account with **Create an account**; new accounts start with
+   $0.00, so for trading use the demo customer):
+   - Customer: username `trainee1`, password = the `SEED_CUSTOMER_PASSWORD` value in your `.env`.
+   - Administrator: username `admin`, password = the `SEED_ADMIN_PASSWORD` value. You land on the
+     Administrator Dashboard (admins cannot trade, and customers cannot open `/admin`).
+   - A wrong password shows "Invalid username or password." Use **Log out** (top right) to leave.
+
+5. **Try a purchase** (logged in as `trainee1`):
    - The top bar shows Cash Balance `$10,000.00` and Portfolio Value `$0.00`.
    - Click **Trade** next to *Sonoran Solar Corp (SSOL)*.
    - Type `10` in Quantity and click **Review Order**.
@@ -52,11 +59,11 @@ MySQL Server must be running. Press the Windows key, type **Services**, open it,
      `Purchased 10 shares of SSOL at $42.50 for $425.00.`, Cash Balance `$9,575.00`, and
      SSOL listed under **My Portfolio** and **Recent Transactions**.
 
-5. **Try a sale:** click **Trade** on SSOL again, click the **Sell** button at the top of the
+6. **Try a sale:** click **Trade** on SSOL again, click the **Sell** button at the top of the
    page, enter `4`, **Review Order**, **Confirm Transaction**. Cash goes up by `$170.00` and
    you now own 6 shares.
 
-6. **Try the error messages:**
+7. **Try the error messages:**
    - Trade **Grand Canyon Holdings (GCNY)**, quantity `1`: **Insufficient Funds**
      (`This order costs $12,500.00 but your cash balance is ...`).
    - Trade **Saguaro Rare Earths (SAGU)**, quantity `51`: **Insufficient Shares Available**
@@ -65,7 +72,7 @@ MySQL Server must be running. Press the Windows key, type **Services**, open it,
    - On the review screen, click **Cancel** instead of Confirm: `Order cancelled.` and
      nothing is charged.
 
-7. **Stop the server:** click in the terminal and press **Ctrl+C**.
+8. **Stop the server:** click in the terminal and press **Ctrl+C**.
 
 ## C. Look at the data in MySQL Workbench
 

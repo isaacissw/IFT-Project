@@ -10,8 +10,17 @@
   <nav class="topnav">
     <span class="brand">Stock Trading System</span>
     <span class="nav-stats">
+      {% if current_user and current_user.user_type == 'customer' %}
       <span class="stat">Cash Balance: <strong>{{ cash_balance | money }}</strong></span>
       <span class="stat">Portfolio Value: <strong>{{ portfolio_value | money }}</strong></span>
+      {% endif %}
+      {% if current_user %}
+      <span class="stat">{{ current_user.username }}</span>
+      <form method="post" action="{{ url_for('auth.logout') }}" class="logout-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-secondary">Log out</button>
+      </form>
+      {% endif %}
     </span>
   </nav>
   <main class="container">

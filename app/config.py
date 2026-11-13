@@ -37,10 +37,6 @@ class Config:
     # supplied via the environment (see .env.example for a placeholder).
     SECRET_KEY = os.environ.get("SECRET_KEY")
 
-    # Fixed demo customer identity for Phase 1 (no login yet). When unset, the
-    # app resolves the demo user by looking up username "trainee1" at startup.
-    DEMO_USER_ID = os.environ.get("DEMO_USER_ID")
-
     # Time zone used only for displaying timestamps. Defaults to US Eastern,
     # matching the SAD wireframe. Interpreted with zoneinfo.
     MARKET_TIMEZONE = os.environ.get("MARKET_TIMEZONE", "America/New_York")
