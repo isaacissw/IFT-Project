@@ -46,6 +46,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app import db
+from dbhelpers import fresh_db
 from app.services.market import is_market_open
 
 # The market time zone used throughout these tests.
@@ -79,12 +80,8 @@ def _fresh_db():
     means the database lives only for the life of this connection, so each
     caller gets a private, empty database with no state shared across examples.
     """
-    conn = db.get_connection(":memory:")
-    try:
-        db.init_db(conn)
+    with fresh_db(seed=False) as conn:
         yield conn
-    finally:
-        conn.close()
 
 
 def _insert_admin(conn):

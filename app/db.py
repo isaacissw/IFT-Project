@@ -1,21 +1,36 @@
 """Data-access module: the ONLY module permitted to contain SQL or open a
 database connection.
 
-Phase 1 scope for this file (task 2.2): the SQLite connection setup (Decimal
-adapter/converter, PARSE_DECLTYPES, row factory, PRAGMA foreign_keys), helpers
-to turn ``DATABASE_URL`` into a filesystem path and ensure its directory
-exists, the ``transaction()`` context manager built on ``BEGIN IMMEDIATE``, and
-``init_db()`` which creates the schema from ``schema.sql``.
+This module talks to MySQL 8 through PyMySQL. It provides:
 
-The named query functions (get_user_by_id, get_stock, insert_pending_buy, ...)
-are added by later tasks. Routes and services never write SQL or touch a
-connection directly.
+  * ``get_connection(database_url)`` -- opens a connection configured the way
+    every rule requires (autocommit on so we control transactions ourselves,
+    READ COMMITTED isolation, UTC session time zone, exact DECIMAL handling),
+  * ``transaction(conn)`` -- the all-or-nothing transaction context manager
+    (``START TRANSACTION`` ... ``COMMIT`` / ``ROLLBACK``),
+  * ``init_db`` / ``drop_all_tables`` -- build or tear down the schema,
+  * every named query function the services and routes use.
+
+Routes and services never write SQL or touch a connection directly.
+
+Two translation rules keep the rest of the app unchanged:
+
+  * Timestamps. The services pass ISO-8601 strings
+    (``now.isoformat()``, e.g. ``"2026-10-19T04:38:35.326977+00:00"``). MySQL
+    stores them in ``DATETIME(6)`` columns as UTC. ``_ts()`` converts on the way
+    in, and a result converter turns them back into the same ISO-8601 UTC
+    string on the way out, so templates and services see what they always did.
+  * Market hours (``TIME`` columns) are read back as ``"HH:MM:SS"`` strings.
 """
 
 import os
-import sqlite3
 from contextlib import contextmanager
-from decimal import Decimal
+from datetime import datetime, timezone
+from urllib.parse import unquote, urlparse
+
+import pymysql
+from pymysql.constants import CLIENT, FIELD_TYPE
+from pymysql.converters import conversions as _default_conversions
 
 # Path to schema.sql, which lives at the project root (one level above app/).
 # Resolving it from this file keeps init_db working no matter the current
@@ -23,91 +38,144 @@ from decimal import Decimal
 _SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "schema.sql")
 
 
-def _register_decimal():
-    """Teach sqlite3 to store/read money as text, not float.
+# ---------------------------------------------------------------------------
+# Reading values back out of MySQL
+# ---------------------------------------------------------------------------
 
-    SQLite has no real DECIMAL type and would otherwise store money as binary
-    floating point, losing exact cents. We register:
-      - an adapter so a Python ``Decimal`` is written as its string form, and
-      - a converter so any column declared ``DECIMAL`` is read back as a
-        ``Decimal`` rebuilt from that string.
-    The converter only fires when a connection is opened with
-    ``detect_types=sqlite3.PARSE_DECLTYPES`` (see ``get_connection``).
+
+def _decode_datetime(text):
+    """Turn a MySQL DATETIME string into an ISO-8601 UTC string.
+
+    MySQL gives ``"2026-10-19 04:38:35.326977"``. Everything we store is UTC,
+    so we attach the UTC offset and return ``"2026-10-19T04:38:35.326977+00:00"``
+    -- the same text the app has always handled.
     """
-    sqlite3.register_adapter(Decimal, lambda d: str(d))
-    sqlite3.register_converter("DECIMAL", lambda b: Decimal(b.decode("utf-8")))
+    return datetime.fromisoformat(text).replace(tzinfo=timezone.utc).isoformat()
 
 
-def _register_text_datetime():
-    """Keep TIMESTAMP/TIME columns as the ISO-8601 text we stored.
+def _decode_time(text):
+    """Keep TIME columns as plain ``"HH:MM:SS"`` text (the market service parses it)."""
+    return text
 
-    We store timestamps as ISO-8601 text (``now_utc().isoformat()``, e.g.
-    ``"2026-10-19T04:38:35.326977+00:00"``) and market hours as ``"HH:MM:SS"``
-    text, per the design rule "store SQLite timestamps as ISO-8601 text;
-    convert for display only". But ``get_connection`` opens with
-    ``detect_types=sqlite3.PARSE_DECLTYPES`` (required so the DECIMAL converter
-    fires), which also activates sqlite3's built-in ``TIMESTAMP`` converter.
-    That built-in converter is deprecated in Python 3.12+ and cannot parse an
-    ``isoformat()`` string -- it chokes on the ``'T'`` separator and timezone
-    offset and raises ``ValueError: not enough values to unpack`` when reading
-    ANY row with a TIMESTAMP column. We register passthrough converters that
-    simply decode the stored bytes as UTF-8 and hand back the plain ``str``,
-    overriding the broken built-in so ISO-8601 timestamps and ``HH:MM:SS``
-    times round-trip unchanged.
+
+# PyMySQL's normal converters, with DATETIME/TIMESTAMP/TIME overridden as above.
+# DECIMAL is left alone: PyMySQL already returns an exact ``decimal.Decimal``.
+_CONVERSIONS = _default_conversions.copy()
+_CONVERSIONS[FIELD_TYPE.DATETIME] = _decode_datetime
+_CONVERSIONS[FIELD_TYPE.TIMESTAMP] = _decode_datetime
+_CONVERSIONS[FIELD_TYPE.TIME] = _decode_time
+
+
+def _ts(iso_text):
+    """Convert an ISO-8601 timestamp string to a MySQL DATETIME(6) value (UTC).
+
+    ``"2026-10-19T04:38:35.326977+00:00"`` -> ``"2026-10-19 04:38:35.326977"``.
+    Any timezone offset is converted to UTC first, then dropped, because the
+    column holds naive UTC.
     """
-    sqlite3.register_converter("TIMESTAMP", lambda b: b.decode("utf-8"))
-    sqlite3.register_converter("TIME", lambda b: b.decode("utf-8"))
+    dt = datetime.fromisoformat(iso_text)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
-# Register once, at import time, so every connection in the process benefits.
-_register_decimal()
-_register_text_datetime()
+# ---------------------------------------------------------------------------
+# Connection
+# ---------------------------------------------------------------------------
 
 
-def get_connection(db_path):
-    """Open a SQLite connection configured the way every rule requires.
+class Connection:
+    """Thin wrapper around a PyMySQL connection.
 
-    - ``detect_types=sqlite3.PARSE_DECLTYPES`` so the DECIMAL converter fires.
-    - ``isolation_level=None`` so Python's sqlite3 does NOT issue its own
-      implicit BEGIN/COMMIT; we control transactions ourselves via
-      ``transaction()`` and ``BEGIN IMMEDIATE``.
-    - ``row_factory = sqlite3.Row`` so rows are accessible by column name.
-    - ``PRAGMA foreign_keys = ON`` so foreign keys are enforced.
+    Its one job is to let every query in this module use ``?`` placeholders (the
+    style the rest of the project already uses) while PyMySQL expects ``%s``.
+    SQL text in this project never contains a literal ``?`` or ``%``, so a plain
+    replace is safe. Values are ALWAYS passed as parameters, never formatted
+    into the SQL text.
     """
-    conn = sqlite3.connect(
-        db_path,
-        detect_types=sqlite3.PARSE_DECLTYPES,  # so the DECIMAL converter fires
-        isolation_level=None,                  # we control BEGIN/COMMIT ourselves
+
+    def __init__(self, raw):
+        self._raw = raw
+
+    def execute(self, sql, params=()):
+        """Run one statement and return the cursor (fetchone/fetchall/rowcount/lastrowid)."""
+        cur = self._raw.cursor()
+        cur.execute(sql.replace("?", "%s"), tuple(params))
+        return cur
+
+    def close(self):
+        self._raw.close()
+
+
+def parse_database_url(url):
+    """Split ``mysql://user:password@host:port/dbname`` into its parts.
+
+    The password is URL-decoded so special characters can be written as
+    ``%40`` etc. in ``.env``. Raises ``ValueError`` for anything that is not a
+    MySQL URL.
+    """
+    parsed = urlparse(url)
+    if not (parsed.scheme or "").startswith("mysql"):
+        raise ValueError("DATABASE_URL must start with 'mysql://'")
+    database = (parsed.path or "").lstrip("/")
+    if not database:
+        raise ValueError("DATABASE_URL must name a database, e.g. mysql://user:pw@localhost:3306/stock_trading")
+    return {
+        "host": parsed.hostname or "localhost",
+        "port": parsed.port or 3306,
+        "user": unquote(parsed.username or ""),
+        "password": unquote(parsed.password or ""),
+        "database": database,
+    }
+
+
+def with_database_name(url, database):
+    """Return ``url`` pointed at a different database name (used by the tests)."""
+    parsed = urlparse(url)
+    return parsed._replace(path="/" + database).geturl()
+
+
+def get_connection(database_url):
+    """Open a MySQL connection configured the way every rule requires.
+
+    - ``autocommit=True`` so PyMySQL never opens its own hidden transaction; we
+      control transactions explicitly with ``transaction()``.
+    - READ COMMITTED isolation so each statement inside a transaction sees the
+      latest committed data. Combined with ``SELECT ... FOR UPDATE`` row locks,
+      this is what makes re-validation at commit time reliable.
+    - UTC session time zone, exact ``Decimal`` for DECIMAL columns, and
+      ``FOUND_ROWS`` so ``rowcount`` reports rows MATCHED by an UPDATE (the
+      guarded confirm relies on that).
+    - Rows come back as dicts, so ``row["column"]`` works everywhere.
+    """
+    p = parse_database_url(database_url)
+    raw = pymysql.connect(
+        host=p["host"],
+        port=p["port"],
+        user=p["user"],
+        password=p["password"],
+        database=p["database"],
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        autocommit=True,
+        client_flag=CLIENT.FOUND_ROWS,
+        conv=_CONVERSIONS,
+        init_command="SET time_zone = '+00:00', SESSION transaction_isolation = 'READ-COMMITTED'",
     )
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-
-
-def db_path_from_url(url):
-    """Turn a ``sqlite:///...`` URL into a plain filesystem path.
-
-    Example: ``sqlite:///instance/stock_trading.db`` -> ``instance/stock_trading.db``.
-    """
-    prefix = "sqlite:///"
-    assert url.startswith(prefix), "DATABASE_URL must start with 'sqlite:///'"
-    return url[len(prefix):]
-
-
-def ensure_instance_dir(db_path):
-    """Make sure the directory that will hold the SQLite file exists."""
-    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+    return Connection(raw)
 
 
 @contextmanager
 def transaction(conn):
     """Run a block inside one all-or-nothing transaction.
 
-    ``BEGIN IMMEDIATE`` takes a write lock up front so two concurrent writers
-    cannot interleave. On a clean exit we COMMIT; on any exception we ROLLBACK
-    and re-raise, so a partially applied change is never left behind.
+    ``START TRANSACTION`` opens it; on a clean exit we COMMIT, and on any
+    exception we ROLLBACK and re-raise, so a partially applied change is never
+    left behind. Code inside should take row locks with the ``for_update=True``
+    readers (or ``get_transaction_for_update``) so two requests cannot
+    interleave on the same rows.
     """
-    conn.execute("BEGIN IMMEDIATE")
+    conn.execute("START TRANSACTION")
     try:
         yield conn
         conn.execute("COMMIT")
@@ -116,17 +184,58 @@ def transaction(conn):
         raise
 
 
-def init_db(conn):
-    """Create the schema by executing schema.sql against ``conn``.
+# ---------------------------------------------------------------------------
+# Schema setup / teardown
+# ---------------------------------------------------------------------------
 
-    Reads the full schema from the project-root ``schema.sql`` and runs it as a
-    script. This is the only place that string is executed; it is a trusted,
-    checked-in file, not user input.
+# Fixed, hard-coded statements (children before parents). Nothing here is built
+# from input, so there is no string formatting anywhere in the SQL.
+_DROP_STATEMENTS = (
+    "DROP TABLE IF EXISTS transactions",
+    "DROP TABLE IF EXISTS holdings",
+    "DROP TABLE IF EXISTS market_schedule",
+    "DROP TABLE IF EXISTS market_settings",
+    "DROP TABLE IF EXISTS stocks",
+    "DROP TABLE IF EXISTS users",
+)
+
+_CLEAR_STATEMENTS = (
+    "DELETE FROM transactions",
+    "DELETE FROM holdings",
+    "DELETE FROM market_schedule",
+    "DELETE FROM market_settings",
+    "DELETE FROM stocks",
+    "DELETE FROM users",
+)
+
+
+def init_db(conn):
+    """Create the schema by running every statement in schema.sql.
+
+    schema.sql is a trusted, checked-in file (not user input). PyMySQL runs one
+    statement at a time, so the file is split on ``;`` and each piece is run.
     """
     with open(_SCHEMA_PATH, "r", encoding="utf-8") as f:
         schema_sql = f.read()
-    conn.executescript(schema_sql)
+    for statement in schema_sql.split(";"):
+        if statement.strip():
+            conn.execute(statement)
 
+
+def drop_all_tables(conn):
+    """Drop every project table (foreign-key checks are paused while doing it)."""
+    conn.execute("SET FOREIGN_KEY_CHECKS = 0")
+    try:
+        for statement in _DROP_STATEMENTS:
+            conn.execute(statement)
+    finally:
+        conn.execute("SET FOREIGN_KEY_CHECKS = 1")
+
+
+def clear_all_rows(conn):
+    """Delete every row from every table, keeping the tables (used by the tests)."""
+    for statement in _CLEAR_STATEMENTS:
+        conn.execute(statement)
 
 # ---------------------------------------------------------------------------
 # Named read query functions (task 4.1)
@@ -139,12 +248,24 @@ def init_db(conn):
 # ---------------------------------------------------------------------------
 
 
-def get_user_by_id(conn, user_id):
-    """Return one user row by id, or None if there is no such user."""
-    cur = conn.execute(
-        "SELECT * FROM users WHERE user_id = ?",
-        (user_id,),
-    )
+def get_user_by_id(conn, user_id, for_update=False):
+    """Return one user row by id, or None if there is no such user.
+
+    ``for_update=True`` adds ``FOR UPDATE`` so the row is locked until the
+    surrounding transaction ends. The confirm flows use it on the user's row so
+    two requests cannot spend the same cash at the same time. (Two fixed SQL
+    strings rather than building one, so no SQL is ever assembled from pieces.)
+    """
+    if for_update:
+        cur = conn.execute(
+            "SELECT * FROM users WHERE user_id = ? FOR UPDATE",
+            (user_id,),
+        )
+    else:
+        cur = conn.execute(
+            "SELECT * FROM users WHERE user_id = ?",
+            (user_id,),
+        )
     return cur.fetchone()
 
 
@@ -157,12 +278,23 @@ def get_user_by_username(conn, username):
     return cur.fetchone()
 
 
-def get_stock(conn, stock_id):
-    """Return one stock row by id, or None if there is no such stock."""
-    cur = conn.execute(
-        "SELECT * FROM stocks WHERE stock_id = ?",
-        (stock_id,),
-    )
+def get_stock(conn, stock_id, for_update=False):
+    """Return one stock row by id, or None if there is no such stock.
+
+    ``for_update=True`` locks the stock row until the transaction ends. Every
+    buy/sell confirm locks the stock first, so confirms on the same stock run
+    one at a time and the shares-available check cannot go stale mid-commit.
+    """
+    if for_update:
+        cur = conn.execute(
+            "SELECT * FROM stocks WHERE stock_id = ? FOR UPDATE",
+            (stock_id,),
+        )
+    else:
+        cur = conn.execute(
+            "SELECT * FROM stocks WHERE stock_id = ?",
+            (stock_id,),
+        )
     return cur.fetchone()
 
 
@@ -370,8 +502,8 @@ def insert_user(
             user_type,
             cash_balance,
             is_active,
-            created_at,
-            updated_at,
+            _ts(created_at),
+            _ts(updated_at),
         ),
     )
     return cur.lastrowid
@@ -413,8 +545,8 @@ def insert_stock(
             description,
             logo_filename,
             created_by,
-            created_at,
-            price_updated_at,
+            _ts(created_at),
+            _ts(price_updated_at),
         ),
     )
     return cur.lastrowid
@@ -450,8 +582,8 @@ def insert_market_schedule_row(
             market_open_time,
             market_close_time,
             is_holiday,
-            created_at,
-            updated_at,
+            _ts(created_at),
+            _ts(updated_at),
         ),
     )
     return cur.lastrowid
@@ -475,7 +607,7 @@ def insert_market_settings(
         INSERT INTO market_settings (setting_id, override_mode, updated_by, updated_at)
         VALUES (?, ?, ?, ?)
         """,
-        (1, override_mode, updated_by, updated_at),
+        (1, override_mode, updated_by, _ts(updated_at)),
     )
 
 # ---------------------------------------------------------------------------
@@ -530,7 +662,7 @@ def insert_pending_buy(
             quantity,
             price_per_share,
             total_amount,
-            created_at,
+            _ts(created_at),
         ),
     )
     return cur.lastrowid
@@ -564,14 +696,13 @@ def insert_pending_buy(
 def get_transaction_for_update(conn, transaction_id):
     """Re-read one transaction row by id inside the confirm transaction.
 
-    The name reflects the design intent (a ``SELECT ... FOR UPDATE``-style
-    re-read), but SQLite has no row-level ``FOR UPDATE``. The write
-    serialization is provided by the surrounding ``BEGIN IMMEDIATE`` lock the
-    caller already holds, so this is simply a ``SELECT`` of the current row.
+    A real ``SELECT ... FOR UPDATE``: the row stays locked until the
+    surrounding transaction commits or rolls back, so a second, simultaneous
+    confirm of the same order has to wait and then sees the final status.
     Returns the row, or None if there is no such transaction.
     """
     cur = conn.execute(
-        "SELECT * FROM transactions WHERE transaction_id = ?",
+        "SELECT * FROM transactions WHERE transaction_id = ? FOR UPDATE",
         (transaction_id,),
     )
     return cur.fetchone()
@@ -596,7 +727,7 @@ def guarded_confirm_update(conn, transaction_id, confirmed_at):
         SET status = 'confirmed', confirmed_at = ?
         WHERE transaction_id = ? AND status = 'pending'
         """,
-        (confirmed_at, transaction_id),
+        (_ts(confirmed_at), transaction_id),
     )
     return cur.rowcount
 
@@ -611,7 +742,7 @@ def update_user_cash(conn, user_id, new_balance, updated_at):
     """
     conn.execute(
         "UPDATE users SET cash_balance = ?, updated_at = ? WHERE user_id = ?",
-        (new_balance, updated_at, user_id),
+        (new_balance, _ts(updated_at), user_id),
     )
 
 
@@ -628,6 +759,7 @@ def upsert_holding(conn, user_id, stock_id, quantity, now):
     keeps a single, readable seam that the rollback test monkeypatches. Kept as
     one named function for exactly that reason.
     """
+    now = _ts(now)
     existing = get_holding(conn, user_id, stock_id)
     if existing is None:
         conn.execute(
@@ -655,7 +787,7 @@ def set_transaction_executed(conn, transaction_id, executed_at):
     """
     conn.execute(
         "UPDATE transactions SET status = 'executed', executed_at = ? WHERE transaction_id = ?",
-        (executed_at, transaction_id),
+        (_ts(executed_at), transaction_id),
     )
 
 
@@ -712,7 +844,7 @@ def insert_pending_sell(
         )
         VALUES (?, ?, 'sell', ?, ?, ?, 'pending', ?, NULL, NULL)
         """,
-        (user_id, stock_id, quantity, price_per_share, total_amount, created_at),
+        (user_id, stock_id, quantity, price_per_share, total_amount, _ts(created_at)),
     )
     return cur.lastrowid
 
@@ -730,6 +862,7 @@ def reduce_holding(conn, user_id, stock_id, quantity, now):
     The caller has already validated that the user owns at least ``quantity``
     shares, so a missing row or an over-sell is a programming error here.
     """
+    now = _ts(now)
     existing = get_holding(conn, user_id, stock_id)
     if existing is None:
         raise ValueError("reduce_holding called with no existing holding")

@@ -48,14 +48,8 @@ def create_app(config_object=Config):
     # 3. CSRF protection, so every POST form must carry a valid token.
     csrf.init_app(app)
 
-    # 4. Ensure the directory that will hold the SQLite file exists. The path
-    #    is derived from DATABASE_URL by app/db.py so the SQLite-vs-URL detail
-    #    stays in one place.
-    db_url = app.config["DATABASE_URL"]
-    db_path = db_module.db_path_from_url(db_url)
-    db_module.ensure_instance_dir(db_path)
-    # Remember the resolved filesystem path for request-time DB access.
-    app.config["DATABASE_PATH"] = db_path
+    # 4. The database is MySQL, reached through DATABASE_URL (see .env). Every
+    #    request opens its own connection through app/db.py.
 
     # 5. Resolve the demo user lazily on the first request. Doing it at import
     #    or create_app() time would fail before the database is initialised
@@ -151,7 +145,7 @@ def _ensure_demo_user_resolved(app):
         return
 
     try:
-        conn = db_module.get_connection(app.config["DATABASE_PATH"])
+        conn = db_module.get_connection(app.config["DATABASE_URL"])
     except Exception:
         return
 
@@ -166,7 +160,6 @@ def _ensure_demo_user_resolved(app):
             pass
 
     if row is not None:
-        # sqlite3.Row supports mapping-style access by column name.
         app.config["RESOLVED_DEMO_USER_ID"] = row["user_id"]
 
 
@@ -190,20 +183,17 @@ def init_db_command():
 
     Steps (design "Database Initialization and Seeding", Requirement 4.1):
 
-      1. Resolve the SQLite file path from DATABASE_URL and make sure its
-         directory exists (both via app/db.py so the sqlite-vs-URL detail stays
-         in one place).
-      2. "Drop" the database by deleting the existing SQLite file if present,
-         so the recreate starts from a clean slate with no stale rows and no
-         UNIQUE-constraint collisions on re-run.
-      3. Open a fresh connection and build the schema from schema.sql via
-         app/db.py's init_db().
+      1. Connect to the MySQL database named in DATABASE_URL (the database
+         itself must already exist; create it once in MySQL Workbench).
+      2. Drop every project table so the recreate starts from a clean slate
+         with no stale rows and no UNIQUE-constraint collisions on re-run.
+      3. Build the schema from schema.sql via app/db.py's init_db().
       4. Run the seed loader inside one transaction() so every seeded row is
          committed together (and rolled back as a unit on any error).
       5. Print the seeded row count for each of the six whitelisted tables.
 
-    All SQL stays in app/db.py: this command only calls db helpers (db_path_from_url,
-    ensure_instance_dir, get_connection, init_db, count_rows) and seed_into. It
+    All SQL stays in app/db.py: this command only calls db helpers
+    (get_connection, drop_all_tables, init_db, count_rows) and seed_into. It
     never writes raw SQL and never prints any secret (the seed passwords are
     read and hashed inside seed_into and are not touched here).
     """
@@ -211,20 +201,10 @@ def init_db_command():
     # seed.py, which imports from this package.
     from seed import seed_into
 
-    # 1. Resolve the SQLite file path. Prefer the path the factory already
-    #    resolved into config; fall back to deriving it from DATABASE_URL.
-    db_path = current_app.config.get("DATABASE_PATH")
-    if not db_path:
-        db_path = db_module.db_path_from_url(current_app.config["DATABASE_URL"])
-    db_module.ensure_instance_dir(db_path)
-
-    # 2. Drop: remove the existing SQLite file so we recreate from scratch.
-    if os.path.exists(db_path):
-        os.remove(db_path)
-
-    # 3. Recreate the schema on a fresh connection.
-    conn = db_module.get_connection(db_path)
+    # 1-3. Connect, drop the old tables, recreate the schema.
+    conn = db_module.get_connection(current_app.config["DATABASE_URL"])
     try:
+        db_module.drop_all_tables(conn)
         db_module.init_db(conn)
 
         # 4. Seed inside one all-or-nothing transaction so the rows persist

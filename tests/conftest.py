@@ -1,107 +1,69 @@
-"""Shared pytest fixtures for the Phase 1 test suite.
+"""Shared pytest fixtures for the test suite.
 
-This is the test harness foundation (tasks 3.3 and 4.4). It provides:
+  - ``db_conn`` -- a connection to the MySQL *test* database, emptied and then
+    seeded with the known demo data for every test, so tests are isolated and
+    start from the same state.
+  - ``app`` / ``client`` -- a Flask app from ``create_app()`` pointed at that
+    same test database (seeded), with CSRF **enabled** by default, and the
+    Flask test client for route-level tests.
 
-  - ``db_conn`` — a connection to a *fresh*, fully **seeded** SQLite database
-    built from ``schema.sql`` plus ``seed_into(conn)`` for every test, so tests
-    are isolated and start from the known demo data.
-  - ``app`` / ``client`` — a Flask app from ``create_app()`` pointed at its own
-    per-test temp database (also schema + seed), with CSRF **enabled** by
-    default, and the Flask test client for route-level tests.
+The test database is separate from the development one (see
+``tests/dbhelpers.py``); the tests can never touch your real data.
 
 Seeding reads ``SEED_ADMIN_PASSWORD`` and ``SEED_CUSTOMER_PASSWORD`` from the
-environment (see ``seed.py``). Tests must never depend on a real ``.env`` or a
-real secret, so the fixtures set obviously-fake dev placeholder values for
-those variables before seeding. These are throwaway values used only to produce
-a Werkzeug hash for the two demo users; they are not real credentials.
+environment. The fixtures set obviously-fake throwaway values for those so
+tests never depend on a real ``.env`` secret.
 
-Services receive ``now`` as an argument (see ``app/clock.py`` and the design's
-"Clock injection" note), so no clock wiring is needed here beyond leaving room
-for property/unit tests to pass an explicit ``now``.
+Services receive ``now`` as an argument (see ``app/clock.py``), so tests pass an
+explicit ``now`` and never depend on the wall clock.
 """
 
 import pytest
+from hypothesis import settings
 
-from app import db
+from dbhelpers import fresh_db, test_database_url
 
+# Hypothesis normally fails an example that takes over 200 ms. A real MySQL
+# database is slower than the old in-memory one, so a slow example is not a bug.
+# Turn the time limit off for the whole suite.
+settings.register_profile("mysql", deadline=None)
+settings.load_profile("mysql")
 
 # Obviously-fake, non-secret placeholder passwords used only so ``seed_into``
-# can compute a Werkzeug hash for the two demo users during tests. NEVER real
-# secrets — these exist only to make seeding deterministic without a real .env.
+# can compute a Werkzeug hash for the two demo users during tests.
 _FAKE_SEED_ADMIN_PASSWORD = "test-admin-password-not-real"
 _FAKE_SEED_CUSTOMER_PASSWORD = "test-customer-password-not-real"
 
 
 def _set_fake_seed_passwords(monkeypatch):
-    """Point the seed password env vars at safe, fake dev values for a test.
-
-    ``seed_into`` reads these two variables and refuses to invent a default, so
-    they must be present for seeding to work. We set fake throwaway values via
-    monkeypatch so they are scoped to the test and never leak real secrets.
-    """
+    """Point the seed password env vars at safe, fake dev values for a test."""
     monkeypatch.setenv("SEED_ADMIN_PASSWORD", _FAKE_SEED_ADMIN_PASSWORD)
     monkeypatch.setenv("SEED_CUSTOMER_PASSWORD", _FAKE_SEED_CUSTOMER_PASSWORD)
 
 
-def _build_seeded_db(db_path):
-    """Open ``db_path``, build the schema, seed demo data, and return the conn.
-
-    All database access goes through ``app.db`` (schema via ``init_db``) and the
-    ``seed_into`` helper, which itself only calls ``app.db`` insert helpers — no
-    raw SQL lives in this fixture module.
-    """
-    # Imported lazily so the module imports cleanly even while seed.py is being
-    # developed; by task 4.4 seed_into exists.
-    from seed import seed_into
-
-    conn = db.get_connection(str(db_path))
-    db.init_db(conn)
-    seed_into(conn)
-    return conn
-
-
 @pytest.fixture
-def db_conn(tmp_path, monkeypatch):
-    """Yield a connection to a fresh, **seeded** SQLite database.
-
-    Each test gets its own temp database file (via pytest's ``tmp_path``), built
-    from ``schema.sql`` (through ``app.db.init_db``) and then populated with the
-    known demo data via ``seed_into(conn)``. Fully isolated per test.
-    """
+def db_conn(monkeypatch):
+    """Yield a connection to the MySQL test database, freshly emptied and seeded."""
     _set_fake_seed_passwords(monkeypatch)
-
-    db_path = tmp_path / "test_stock_trading.db"
-    conn = _build_seeded_db(db_path)
-    try:
+    with fresh_db(seed=True) as conn:
         yield conn
-    finally:
-        conn.close()
 
 
 @pytest.fixture
-def app(tmp_path, monkeypatch):
-    """A Flask app from ``create_app()`` pointed at a seeded per-test temp DB.
+def app(monkeypatch):
+    """A Flask app from ``create_app()`` pointed at the seeded MySQL test database.
 
-    The app gets its OWN temp database file (a real file, not ``:memory:``, so
-    later route tests can hit a seeded DB across requests). We build and seed it
-    the same way as ``db_conn``, then point the app at it via ``DATABASE_URL``
-    before ``create_app()`` reads config. CSRF stays ENABLED by default — the
-    design says only a specific test that needs to bypass CSRF disables it, so
-    the default ``client`` is CSRF-enabled.
+    CSRF stays ENABLED by default -- only a specific test that needs to bypass
+    it disables it, so the default ``client`` is CSRF-enabled.
     """
     _set_fake_seed_passwords(monkeypatch)
 
-    # The app's database lives in its own file so it is independent of db_conn.
-    app_db_path = tmp_path / "app_stock_trading.db"
+    # Reset and seed the test database, then let the app open its own
+    # connections to it for each request.
+    with fresh_db(seed=True):
+        pass
 
-    # Build and seed the app's database up front, then close our setup
-    # connection; the app opens its own connections per request.
-    conn = _build_seeded_db(app_db_path)
-    conn.close()
-
-    # Point the app's config at this temp DB before create_app() reads it.
-    # db_path_from_url strips the "sqlite:///" prefix, so round-trip the path.
-    database_url = "sqlite:///" + str(app_db_path).replace("\\", "/")
+    database_url = test_database_url()
     monkeypatch.setenv("DATABASE_URL", database_url)
     # A throwaway signing key so the CSRF-enabled test client works without a
     # real .env. Not a secret.
@@ -112,10 +74,8 @@ def app(tmp_path, monkeypatch):
     flask_app = create_app()
     flask_app.config.update(
         TESTING=True,
-        # CSRF is ENABLED by default (WTF_CSRF_ENABLED left True). A variant
-        # fixture/test disables it only where a test specifically needs to.
+        # CSRF is ENABLED by default (WTF_CSRF_ENABLED left True).
         DATABASE_URL=database_url,
-        DATABASE_PATH=str(app_db_path),
     )
 
     return flask_app

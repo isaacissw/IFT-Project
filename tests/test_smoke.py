@@ -19,13 +19,13 @@ EXPECTED_TABLES = {
 def test_db_conn_has_six_tables(db_conn):
     """The fresh database built from schema.sql contains exactly the six tables."""
     rows = db_conn.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table'"
+        "SELECT table_name AS name FROM information_schema.tables "
+        "WHERE table_schema = DATABASE()"
     ).fetchall()
     table_names = {row["name"] for row in rows}
 
-    # All six expected tables are present (ignore any SQLite internal tables
-    # such as sqlite_sequence created by AUTOINCREMENT).
-    assert EXPECTED_TABLES <= table_names
+    # Exactly the six expected tables exist in the test database.
+    assert table_names == EXPECTED_TABLES
 
 
 def test_db_conn_is_seeded(db_conn):

@@ -67,7 +67,7 @@ from app.services.trading import (  # noqa: E402
     compute_total_cost,
     quote_buy,
 )
-from seed import seed_into  # noqa: E402
+from dbhelpers import fresh_db  # noqa: E402
 
 # A timezone-aware UTC instant used as ``now`` throughout. Its exact value does
 # not matter because the valid-quote tests force the market open via an
@@ -88,13 +88,8 @@ def _fresh_db():
     only for the life of this connection, so each caller gets a private database
     with no state shared across examples.
     """
-    conn = db.get_connection(":memory:")
-    try:
-        db.init_db(conn)
-        seed_into(conn)
+    with fresh_db(seed=True) as conn:
         yield conn
-    finally:
-        conn.close()
 
 
 def _set_override(conn, mode):

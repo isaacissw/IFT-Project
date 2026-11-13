@@ -319,7 +319,7 @@ def confirm_buy(conn, user_id, transaction_id, now,
     """Confirm and execute a pending buy as one all-or-nothing operation.
 
     Every read and write happens inside a single ``db.transaction()``
-    (``BEGIN IMMEDIATE``). Any exception rolls the whole thing back, so cash,
+    (``START TRANSACTION`` with row locks). Any exception rolls the whole thing back, so cash,
     holdings, and the transaction row never end up partially updated.
 
     Steps (re-validated at commit time; browser-sent values are never trusted):
@@ -349,7 +349,9 @@ def confirm_buy(conn, user_id, transaction_id, now,
         if not market.is_market_open(conn, now, tz_name):
             raise MarketClosedError()
 
-        stock = db.get_stock(conn, tx["stock_id"])
+        # Lock the stock row (and later the user row) for the rest of this
+        # transaction so no other confirm can change them mid-commit.
+        stock = db.get_stock(conn, tx["stock_id"], for_update=True)
         # Stock could in principle be gone; treat as a validation failure.
         if stock is None:
             raise ValidationError("Stock not found.")
@@ -380,7 +382,7 @@ def confirm_buy(conn, user_id, transaction_id, now,
                 available=shares_available, ticker=stock["ticker_symbol"]
             )
 
-        user = db.get_user_by_id(conn, user_id)
+        user = db.get_user_by_id(conn, user_id, for_update=True)
         cash_before = to_money(user["cash_balance"])
         if cash_before < total:
             raise InsufficientFundsError(total=total, balance=cash_before)
@@ -537,7 +539,9 @@ def confirm_sell(conn, user_id, transaction_id, now,
         if not market.is_market_open(conn, now, tz_name):
             raise MarketClosedError()
 
-        stock = db.get_stock(conn, tx["stock_id"])
+        # Lock the stock row (and later the user row) for the rest of this
+        # transaction so no other confirm can change them mid-commit.
+        stock = db.get_stock(conn, tx["stock_id"], for_update=True)
         if stock is None:
             raise ValidationError("Stock not found.")
 
@@ -572,7 +576,7 @@ def confirm_sell(conn, user_id, transaction_id, now,
             )
 
         # Credit cash (Python Decimal); reject if it would overflow the column.
-        user = db.get_user_by_id(conn, user_id)
+        user = db.get_user_by_id(conn, user_id, for_update=True)
         cash_before = to_money(user["cash_balance"])
         new_cash = cash_before + proceeds
         if new_cash > MAX_MONEY:

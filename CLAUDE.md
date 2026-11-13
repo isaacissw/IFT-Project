@@ -13,14 +13,16 @@ Stop and summarize after each feature; wait for approval before the next one.
 
 ## Stack (fixed)
 Python 3.14, Flask 3 app factory + Blueprints, Jinja2 templates, plain CSS/JS (no frameworks, no ORM,
-no migrations), sqlite3 locally, MySQL 8 (pymysql) on AWS later, pytest (+ hypothesis).
+no migrations), MySQL 8 via PyMySQL (local and AWS RDS), pytest (+ hypothesis).
+Tests use a separate `stock_trading_test` database (name must end in `_test`); dev data is never touched.
 Run: `.venv\Scripts\Activate.ps1`, `flask --app app init-db`, `flask --app app run`, `pytest -q`.
 
 ## Non-negotiable rules
-- ALL SQL lives in `app/db.py`; parameterized only (`?`), never f-strings/concat.
+- ALL SQL lives in `app/db.py`; parameterized only (`?` is translated to `%s` by db.py), never f-strings/concat.
 - Money is `Decimal` from strings, never float; no money math inside SQL.
 - Services (`app/services/`) never import Flask; routes stay thin.
-- Multi-step changes run in one `BEGIN IMMEDIATE` transaction; re-validate at commit time.
+- Multi-step changes run in one `transaction()` (START TRANSACTION) taking `FOR UPDATE` locks on the
+  stock and user rows; re-validate at commit time.
 - `transactions` rows that are confirmed/executed are never updated or deleted.
 - CSRF on every POST; POST-Redirect-GET after state changes; pages work without JS.
 - Every feature ships with tests; full suite must pass. Record evidence in `docs/VERIFICATION.md`.
@@ -28,5 +30,6 @@ Run: `.venv\Scripts\Activate.ps1`, `flask --app app init-db`, `flask --app app r
   No other schema changes without asking.
 
 ## Status
-This folder (`StockTradingApp`) is the real build. It started as a copy of Kiro's output, which already has
-buy AND sell working on SQLite. Claude Code is the builder from here; Kiro is no longer used on this folder.
+This folder (`StockTradingApp`) is the real build. It started as a copy of Kiro's output (buy AND sell on
+SQLite) and has been moved to MySQL. Remaining work, in order: missing tests (buy/sell/rollback/routes/SQL
+safety), login + signup, cash deposit/withdraw, history page, admin tools, price generator, trade modal, AWS. Claude Code is the builder from here; Kiro is no longer used on this folder.

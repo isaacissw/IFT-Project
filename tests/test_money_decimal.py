@@ -48,6 +48,7 @@ from hypothesis import given, settings, example
 from hypothesis import strategies as st
 
 from app import db
+from dbhelpers import fresh_db
 
 # The maximum value a DECIMAL(10,2) money column can hold in this schema.
 MAX_WHOLE = 99_999_999  # 8 integer digits
@@ -84,12 +85,8 @@ def _fresh_db():
     rows and no state shared with any other example or test. The connection is
     always closed on exit, which also discards the in-memory database.
     """
-    conn = db.get_connection(":memory:")
-    try:
-        db.init_db(conn)
+    with fresh_db(seed=False) as conn:
         yield conn
-    finally:
-        conn.close()
 
 
 def _round_trip(conn, value: Decimal) -> Decimal:

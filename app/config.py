@@ -25,10 +25,12 @@ class Config:
     loader, the market service, and the demo-user resolver).
     """
 
-    # Chooses the database engine/location. Defaults to the local SQLite file
-    # used for Phase 1. The "sqlite:///" prefix is parsed inside app/db.py.
+    # Where the MySQL database lives, as mysql://user:password@host:port/dbname.
+    # The real value (with the password) belongs in .env, never in code. The
+    # default below has no password, so it only works for a passwordless local
+    # user. The URL is parsed inside app/db.py.
     DATABASE_URL = os.environ.get(
-        "DATABASE_URL", "sqlite:///instance/stock_trading.db"
+        "DATABASE_URL", "mysql://stock_app@localhost:3306/stock_trading"
     )
 
     # Flask session signing key. No default is provided: a real value must be

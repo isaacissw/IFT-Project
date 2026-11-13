@@ -1,88 +1,79 @@
-# Stock Trading System — Phase 1 (Buy a Stock)
+# Stock Trading System
 
-A simulated stock-market web application. Phase 1 covers the local **Buy a Stock**
-capability: one seeded demo customer can view stocks, enter a whole number of shares,
-review a confirmation screen, and confirm a purchase that atomically debits cash,
-adds holdings, and records a timestamped transaction.
+A simulated stock-market web application for training new stockbrokers (IFT 401).
+Customers buy and sell simulated stocks with a review-then-confirm flow; all money and
+stocks are simulated. Built with Flask, Jinja2 and MySQL 8.
 
-This phase runs **locally only** against a SQLite database at `instance/stock_trading.db`.
-There is no login and nothing runs in the cloud.
-
-> Note: setup and run commands below are the Phase 1 working instructions and will be
-> finalized in task 10.2.
+Currently built: buy and sell flows, dashboard, market-hours check (with override), and
+the full database schema. See `docs/` for the SAD and the project rules.
 
 ## Requirements
 
-- Python 3.14 (developed and verified on 3.14.7)
+- Python 3.14
+- MySQL 8 (Server running on your machine) and, optionally, MySQL Workbench
 - The pinned dependencies in `requirements.txt`
 
 ## Setup
 
-Create and activate a virtual environment, then install the pinned dependencies.
+1. Create and activate a virtual environment, then install the dependencies.
 
-Windows (PowerShell):
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
+2. Create the databases and a database user (once). In MySQL Workbench, open a query tab
+   and run (choose your own password):
 
-macOS / Linux:
+   ```sql
+   CREATE DATABASE stock_trading;
+   CREATE DATABASE stock_trading_test;
+   CREATE USER 'stock_app'@'localhost' IDENTIFIED BY 'your-db-password';
+   GRANT ALL ON stock_trading.* TO 'stock_app'@'localhost';
+   GRANT ALL ON stock_trading_test.* TO 'stock_app'@'localhost';
+   ```
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+   `stock_trading_test` is used only by the automated tests, so they never touch your
+   real data.
 
-Copy the example environment file and adjust values as needed. Never commit `.env`.
+3. Copy `.env.example` to `.env` and fill it in. Never commit `.env`.
 
-```bash
-cp .env.example .env
-```
+   ```
+   DATABASE_URL=mysql://stock_app:your-db-password@localhost:3306/stock_trading
+   ```
 
-Set at least `SECRET_KEY`, `SEED_ADMIN_PASSWORD`, and `SEED_CUSTOMER_PASSWORD` in `.env`
-before initializing the database. The placeholders in `.env.example` are intentionally
-fake (for example `change-me-in-dev`) and must be replaced for real use.
+   If your password contains `@`, `:` or `/`, write it URL-encoded (`%40`, `%3A`, `%2F`).
+   Also set `SECRET_KEY`, `SEED_ADMIN_PASSWORD` and `SEED_CUSTOMER_PASSWORD`.
 
 ## Database initialization
 
-Drop and recreate the database from `schema.sql`, load the demo seed data, and print a
-per-table row summary:
+Drops every project table, recreates it from `schema.sql`, loads the demo data and prints
+row counts:
 
-```bash
+```powershell
 flask --app app init-db
 ```
 
 ## Run
 
-```bash
+```powershell
 flask --app app run
 ```
 
-The app acts as the fixed demo customer `trainee1`.
+Open http://127.0.0.1:5000. Until login is built, the app acts as the demo customer
+`trainee1`.
 
 ## Test
 
-```bash
-pytest
+```powershell
+pytest -q
 ```
 
-## Pinned dependency versions (Python 3.14)
+## Project layout
 
-The exact versions installed and confirmed to install cleanly on Python 3.14:
-
-| Package | Version |
-| --- | --- |
-| Flask | 3.1.2 |
-| Werkzeug | 3.1.3 |
-| Flask-WTF | 1.2.2 |
-| python-dotenv | 1.1.1 |
-| pytest | 8.4.2 |
-| hypothesis | 6.140.3 |
-
-`hypothesis` is pinned because the property-based tests depend on it (the pin stays
-even if those optional tests are deferred). Flask pulls in Jinja2, click,
-itsdangerous, and MarkupSafe transitively; those resolve to 3.14-compatible versions
-automatically.
+- `app/db.py` — the only module that contains SQL
+- `app/services/` — business rules (no Flask imports)
+- `app/routes/` — thin Flask blueprints
+- `schema.sql` — MySQL schema, `seed.py` — demo data
+- `docs/` — SAD, project rules, verification record

@@ -60,7 +60,7 @@ def _tz_name():
 
 def _open_db():
     """Open a request-scoped DB connection via the data-access module."""
-    return db.get_connection(current_app.config["DATABASE_PATH"])
+    return db.get_connection(current_app.config["DATABASE_URL"])
 
 
 def _portfolio_value(holdings):
