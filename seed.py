@@ -143,6 +143,10 @@ def seed_into(conn):
         )
 
     # --- Seven market_schedule rows (one per weekday) --------------------
+    # TODO (before the final demo): the business case says the default schedule
+    # is weekdays 9:00-17:00 and closed on weekends. For development and testing
+    # the demo market is open all day, every day. See "Before the final demo" in
+    # CLAUDE.md and tests/dbhelpers.py:use_business_hours for the 9-5 setup.
     for day in _WEEKDAYS:
         db.insert_market_schedule_row(
             conn,

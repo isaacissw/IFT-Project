@@ -32,6 +32,7 @@ from dbhelpers import (
     stock_id,
     trainee_id,
     transactions_for,
+    use_business_hours,
 )
 
 NOW = datetime(2026, 3, 2, 15, 0, 0, tzinfo=timezone.utc)
@@ -148,6 +149,41 @@ def test_market_closed_at_review(db_conn):
     with pytest.raises(MarketClosedError):
         create_pending_buy(db_conn, user, ssol, 1, NOW)
     assert snapshot(db_conn) == before
+
+
+@pytest.mark.parametrize(
+    "label, when_utc",
+    [
+        # New York is UTC-5 in winter (March 2 2026), UTC-4 once daylight saving starts.
+        ("Monday 8:59 AM, before opening", datetime(2026, 3, 2, 13, 59, tzinfo=timezone.utc)),
+        ("Monday 5:00 PM, exactly at closing", datetime(2026, 3, 2, 22, 0, tzinfo=timezone.utc)),
+        ("Monday evening", datetime(2026, 3, 3, 1, 0, tzinfo=timezone.utc)),
+        ("Saturday midday", datetime(2026, 3, 7, 17, 0, tzinfo=timezone.utc)),
+        ("Sunday midday", datetime(2026, 3, 8, 17, 0, tzinfo=timezone.utc)),
+    ],
+)
+def test_default_schedule_is_closed_outside_weekday_9_to_5(db_conn, label, when_utc):
+    user, ssol = trainee_id(db_conn), stock_id(db_conn, "SSOL")
+    use_business_hours(db_conn)
+    before = snapshot(db_conn)
+    with pytest.raises(MarketClosedError):
+        create_pending_buy(db_conn, user, ssol, 1, when_utc)
+    assert snapshot(db_conn) == before, label
+
+
+def test_default_schedule_is_open_at_9am_on_a_weekday(db_conn):
+    user, ssol = trainee_id(db_conn), stock_id(db_conn, "SSOL")
+    use_business_hours(db_conn)
+    opening = datetime(2026, 3, 2, 14, 0, tzinfo=timezone.utc)  # Monday 9:00 AM New York
+    assert create_pending_buy(db_conn, user, ssol, 1, opening)
+
+
+def test_force_open_overrides_the_weekend(db_conn):
+    user, ssol = trainee_id(db_conn), stock_id(db_conn, "SSOL")
+    use_business_hours(db_conn)
+    set_override(db_conn, "force_open")
+    saturday = datetime(2026, 3, 7, 17, 0, tzinfo=timezone.utc)
+    assert create_pending_buy(db_conn, user, ssol, 1, saturday)
 
 
 def test_first_failing_check_wins(db_conn):

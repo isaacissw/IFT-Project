@@ -66,6 +66,16 @@ def set_override(conn, mode):
     conn.execute("UPDATE market_settings SET override_mode = ? WHERE setting_id = 1", (mode,))
 
 
+def use_business_hours(conn):
+    """Switch the market schedule to the business-case default: Mon-Fri 9:00-17:00, weekends closed.
+
+    The seed data keeps the market open 24/7 for development; tests of the 9-5 rule call this.
+    A closed day is stored as is_holiday = 1 ("closed all day").
+    """
+    conn.execute("UPDATE market_schedule SET market_open_time = '09:00:00', market_close_time = '17:00:00'")
+    conn.execute("UPDATE market_schedule SET is_holiday = 1 WHERE day_of_week IN ('Saturday', 'Sunday')")
+
+
 def set_cash(conn, user_id, amount):
     """Set a user's cash balance (amount is a Decimal)."""
     conn.execute("UPDATE users SET cash_balance = ? WHERE user_id = ?", (amount, user_id))

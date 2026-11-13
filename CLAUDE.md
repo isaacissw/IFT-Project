@@ -29,6 +29,12 @@ Run: `.venv\Scripts\Activate.ps1`, `flask --app app init-db`, `flask --app app r
 - Tables are exactly: users, stocks, holdings, transactions, market_schedule, market_settings.
   No other schema changes without asking.
 
+## Before the final demo (do not forget)
+- The seed keeps the market open 24/7 so we can test any time. The business case says the default is
+  weekdays 9:00-17:00 (market time zone), closed weekends. At the end: change `seed.py` to 09:00:00-17:00:00
+  with Saturday/Sunday `is_holiday=1` (see `tests/dbhelpers.py:use_business_hours`), re-run init-db, and
+  update docs/HOW_TO_RUN.md (trades then only work 9-5 ET weekdays unless the admin override is on).
+
 ## Status
 This folder (`StockTradingApp`) is the real build. It started as a copy of Kiro's output (buy AND sell on
 SQLite) and has been moved to MySQL. Remaining work, in order: missing tests (buy/sell/rollback/routes/SQL

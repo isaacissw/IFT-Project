@@ -69,6 +69,13 @@ def app(monkeypatch):
     # real .env. Not a secret.
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-not-real")
 
+    # The seeded market is open weekdays 9-5 New York time, so route tests must
+    # not depend on the real clock. Freeze "now" at Monday 10:00 AM New York time.
+    from datetime import datetime, timezone
+
+    frozen_now = datetime(2026, 3, 2, 15, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr("app.routes.trading.now_utc", lambda: frozen_now)
+
     from app import create_app
 
     flask_app = create_app()
