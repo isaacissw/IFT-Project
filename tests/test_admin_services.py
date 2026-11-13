@@ -1,13 +1,14 @@
-"""Service-level tests for the administrator rules: stocks, market hours and the override."""
+"""Service-level tests for the administrator rules: stocks, logos, market hours and the override."""
 
 import inspect
+import os
 from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
 
 from app import db
-from app.services import admin, market
+from app.services import admin, market, uploads
 from app.services.admin import (
     FormError,
     create_stock,
@@ -22,6 +23,12 @@ from dbhelpers import add_customer, snapshot, stock_id, trainee_id
 NOW = datetime(2026, 3, 2, 15, 0, 0, tzinfo=timezone.utc)  # Monday 10:00 AM New York
 D = Decimal
 
+# The first bytes ("signatures") of each image type, followed by filler.
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 32
+GIF = b"GIF89a" + b"\x00" * 32
+WEBP = b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 32
+
 
 GOOD = dict(company_name="Acme Rockets", ticker="acme", shares="5000", price="19.99", description="Rockets.")
 
@@ -34,7 +41,7 @@ def _create(conn, **overrides):
     values = {**GOOD, **overrides}
     return create_stock(
         conn, _admin_id(conn), values["company_name"], values["ticker"], values["shares"],
-        values["price"], values["description"], NOW,
+        values["price"], values["description"], NOW, logo_filename=values.get("logo_filename"),
     )
 
 
@@ -42,21 +49,21 @@ def _create(conn, **overrides):
 
 
 def test_create_stock_saves_everything_the_form_gave(db_conn):
-    new_id = _create(db_conn)
+    new_id = _create(db_conn, logo_filename="a" * 32 + ".png")
     stock = db.get_stock(db_conn, new_id)
     assert stock["ticker_symbol"] == "ACME"  # upper-cased
     assert stock["company_name"] == "Acme Rockets"
     assert stock["company_shares_outstanding"] == 5000
     assert stock["current_price"] == D("19.99")
     assert stock["description"] == "Rockets."
-    assert stock["logo_filename"] is None  # logos are out of scope
+    assert stock["logo_filename"] == "a" * 32 + ".png"
     assert stock["created_by"] == _admin_id(db_conn)
     assert stock["created_at"] == stock["price_updated_at"] == "2026-03-02T15:00:00+00:00"
 
 
-def test_description_is_optional(db_conn):
+def test_description_and_logo_are_optional(db_conn):
     stock = db.get_stock(db_conn, _create(db_conn, description="   "))
-    assert stock["description"] is None
+    assert stock["description"] is None and stock["logo_filename"] is None
 
 
 def test_values_are_trimmed(db_conn):
@@ -157,6 +164,18 @@ def test_the_edit_functions_have_no_way_to_set_a_price():
     """The rule is built into the code's shape: no price parameter exists to be misused."""
     for func in (update_stock, db.update_stock_details):
         assert not any("price" in name for name in inspect.signature(func).parameters), func.__name__
+
+
+def test_edit_keeps_or_replaces_the_logo(db_conn):
+    ssol = stock_id(db_conn, "SSOL")
+    first = "b" * 32 + ".png"
+    assert update_stock(db_conn, ssol, "Sonoran Solar Corp", None, "1000000", first) is None  # had no logo before
+    assert db.get_stock(db_conn, ssol)["logo_filename"] == first
+    update_stock(db_conn, ssol, "Sonoran Solar Corp", None, "1000000")  # no new logo = keep the old one
+    assert db.get_stock(db_conn, ssol)["logo_filename"] == first
+    second = "c" * 32 + ".jpg"
+    assert update_stock(db_conn, ssol, "Sonoran Solar Corp", None, "1000000", second) == first  # returns the old one
+    assert db.get_stock(db_conn, ssol)["logo_filename"] == second
 
 
 def test_shares_cannot_drop_below_what_customers_own(db_conn):
@@ -294,3 +313,56 @@ def test_unknown_override_values_are_rejected(db_conn, bad):
     with pytest.raises(ValidationError):
         set_market_override(db_conn, _admin_id(db_conn), bad, NOW)
     assert snapshot(db_conn) == before
+
+
+# ============================== logo uploads ===============================
+
+
+@pytest.mark.parametrize("data, ext", [(PNG, "png"), (JPEG, "jpg"), (GIF, "gif"), (WEBP, "webp")])
+def test_real_images_are_recognised_by_content(data, ext):
+    assert uploads.check_logo(data) == ext
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"",
+        b"hello world",
+        b"<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>",  # SVG can carry script
+        b"<html><script>alert(1)</script></html>",
+        b"MZ\x90\x00" + b"\x00" * 50,  # a Windows program
+        b"%PDF-1.4",
+        b"RIFF\x00\x00\x00\x00WAVE" + b"\x00" * 16,  # RIFF container but not WebP
+    ],
+)
+def test_non_images_are_refused(data):
+    with pytest.raises(ValidationError, match="PNG, JPEG, GIF or WebP"):
+        uploads.check_logo(data)
+
+
+def test_a_logo_over_one_megabyte_is_refused():
+    with pytest.raises(ValidationError, match="1 MB"):
+        uploads.check_logo(PNG + b"\x00" * uploads.MAX_LOGO_BYTES)
+    assert uploads.check_logo(PNG + b"\x00" * (uploads.MAX_LOGO_BYTES - len(PNG))) == "png"  # exactly 1 MB is fine
+
+
+def test_saved_logos_get_random_names_inside_the_folder(tmp_path):
+    first = uploads.save_logo(str(tmp_path), PNG, "png")
+    second = uploads.save_logo(str(tmp_path), PNG, "png")
+    assert first != second
+    assert uploads.STORED_NAME_PATTERN.match(first)
+    assert (tmp_path / first).read_bytes() == PNG
+
+
+def test_delete_logo_only_removes_files_this_app_created(tmp_path):
+    keep = tmp_path / "important.txt"
+    keep.write_text("do not delete")
+    name = uploads.save_logo(str(tmp_path), PNG, "png")
+    uploads.delete_logo(str(tmp_path), "important.txt")
+    uploads.delete_logo(str(tmp_path), "../important.txt")
+    uploads.delete_logo(str(tmp_path), None)
+    assert keep.exists()
+    uploads.delete_logo(str(tmp_path), name)
+    assert not (tmp_path / name).exists()
+    uploads.delete_logo(str(tmp_path), name)  # already gone: no error
+    assert sorted(os.listdir(tmp_path)) == ["important.txt"]

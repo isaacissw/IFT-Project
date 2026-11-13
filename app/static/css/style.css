@@ -62,7 +62,7 @@ a { color: var(--asu-maroon); }
 .trade-form label, .auth-form label { display: block; margin: 1rem 0 0.25rem; font-weight: 600; }
 .trade-form input[type=number] { padding: 0.45rem; width: 12rem; max-width: 100%; border: 1px solid var(--input-border); border-radius: 6px; }
 .auth-form input[type=text], .auth-form input[type=email], .auth-form input[type=password],
-.auth-form input[type=number] { padding: 0.5rem; width: 100%; border: 1px solid var(--input-border); border-radius: 6px; font-size: 1rem; background: #fff; }
+.auth-form input[type=number], .auth-form input[type=file] { padding: 0.5rem; width: 100%; border: 1px solid var(--input-border); border-radius: 6px; font-size: 1rem; background: #fff; }
 .auth-form textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--input-border); border-radius: 6px; font: inherit; }
 .auth-form button { margin-top: 1.25rem; }
 .auth-card { max-width: 440px; margin: 0 auto; }
@@ -82,6 +82,9 @@ a { color: var(--asu-maroon); }
 .field-error { margin: 0.25rem 0 0; font-size: 0.9rem; color: #7a1f1f; font-weight: 600; }
 /* Yellow "Once confirmed, this transaction cannot be cancelled." notice */
 .notice { background: #fff8e1; border: 1px solid var(--asu-gold); padding: 0.6rem 0.8rem; border-radius: 6px; }
+
+/* ---------- Company logos (small picture next to the company name) ---------- */
+.logo-thumb { vertical-align: middle; margin-right: 0.5rem; border-radius: 4px; object-fit: contain; }
 
 /* ---------- Administrator pages ---------- */
 .market-status { font-size: 1.05rem; }

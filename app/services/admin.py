@@ -3,9 +3,9 @@
 Rules from the SAD and business case:
 
   * An administrator creates a stock with a company name, ticker, shares
-    outstanding and an INITIAL price, plus an optional description.
-    (Company logos were dropped from the project's scope; the unused
-    ``stocks.logo_filename`` column is left in the schema.)
+    outstanding and an INITIAL price, plus an optional description and an
+    optional company logo image (the image checks live in uploads.py; this
+    file only records the stored file name).
   * After creation the price is never changed by an administrator (only the
     system's price generator moves it). Nothing in this module can change it.
   * An administrator can change the market hours and switch a manual override
@@ -113,7 +113,7 @@ def validate_new_stock(company_name, ticker, shares, price, description):
 # --------------------------------------------------------------------------
 
 
-def create_stock(conn, admin_id, company_name, ticker, shares, price, description, now):
+def create_stock(conn, admin_id, company_name, ticker, shares, price, description, now, logo_filename=None):
     """Create a new stock and return its ``stock_id``. Raises ``FormError`` if anything is wrong.
 
     ``price`` is the INITIAL price; this is the only time an administrator sets it.
@@ -134,7 +134,7 @@ def create_stock(conn, admin_id, company_name, ticker, shares, price, descriptio
             company_shares_outstanding=clean["shares"],
             current_price=clean["price"],
             description=clean["description"],
-            logo_filename=None,  # logos are out of scope; the column stays empty
+            logo_filename=logo_filename,  # None when no logo was uploaded
             created_by=admin_id,
             created_at=stamp,
             price_updated_at=stamp,
@@ -144,11 +144,13 @@ def create_stock(conn, admin_id, company_name, ticker, shares, price, descriptio
         raise FormError({"ticker": "A stock with that ticker already exists."})
 
 
-def update_stock(conn, stock_id, company_name, description, shares):
-    """Change a stock's name, description and shares outstanding.
+def update_stock(conn, stock_id, company_name, description, shares, new_logo_filename=None):
+    """Change a stock's name, description, shares outstanding and (optionally) logo.
 
-    The ticker and the PRICE are never changed. Raises ``FormError`` for bad
-    fields and ``ValidationError("Stock not found.")`` for an unknown stock.
+    The ticker and the PRICE are never changed. ``new_logo_filename`` is None to
+    keep the current logo. Returns the PREVIOUS logo file name, so the caller can
+    delete the old image file once the change has succeeded. Raises ``FormError``
+    for bad fields and ``ValidationError("Stock not found.")`` for an unknown stock.
 
     Shares outstanding cannot be set below the number customers currently own.
     The stock row is locked while we check and update, and every trade locks the
@@ -170,7 +172,9 @@ def update_stock(conn, stock_id, company_name, description, shares):
             raise FormError({
                 "shares": f"Shares outstanding cannot be less than the {held:,} shares customers currently own."
             })
-        db.update_stock_details(conn, stock_id, name, desc, new_shares)
+        keep_or_replace = stock["logo_filename"] if new_logo_filename is None else new_logo_filename
+        db.update_stock_details(conn, stock_id, name, desc, keep_or_replace, new_shares)
+    return stock["logo_filename"]
 
 
 # --------------------------------------------------------------------------

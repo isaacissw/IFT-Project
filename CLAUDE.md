@@ -1,10 +1,12 @@
 # Stock Trading System (IFT 401 capstone)
 
 Simulated stock-market web app. Customers (trainee brokers) buy/sell simulated stocks;
-admins manage stocks and market hours. Source of truth is the SAD (put it at `docs/SAD.pdf`).
-The full standing rules are in `docs/project-rules.md` (copied from Kiro) — read them before changing code.
-NOTE: MySQL 8 is REQUIRED for the final version (team decision), so the SQLite-only parts of the rules are
-being replaced by MySQL. Kiro's original files stay in `C:\Users\sjr_c\Documents\401Project` (read-only reference).
+admins manage stocks and market hours. Sources of truth: the SAD (`docs/Systems Analysis Design Revised.pdf`)
+and the business case (`docs/IFT 401 STS Business Case Updated 20260905.pdf`).
+`docs/project-rules.md` holds the original engineering rules the first version was built to (the layering,
+SQL-safety, Decimal-money and transaction rules still apply). Its header lists which parts are now
+out of date (SQLite and the no-login demo user were replaced by MySQL and real accounts).
+The first prototype lives, untouched, in `C:\Users\sjr_c\Documents\401Project` for reference only.
 
 ## About the user
 Student, not a strong programmer. Build ONE feature at a time, explain changes briefly in plain
@@ -43,15 +45,18 @@ Run: `.venv\Scripts\Activate.ps1`, `flask --app app init-db`, `flask --app app r
   update docs/HOW_TO_RUN.md (trades then only work 9-5 ET weekdays unless the admin override is on).
 
 ## Status
-This folder (`StockTradingApp`) is the real build. It started as a copy of Kiro's output (buy AND sell on
-SQLite) and has been moved to MySQL. Done: MySQL switch, buy/sell tests, login + signup + logout with
-customer/admin roles, cash deposit/withdraw + Financial Records page (includes transaction history).
-admin tools (create/edit stock, weekly hours, manual override; routes in `app/routes/admin.py`, rules in
-`app/services/admin.py`). Company logos were deliberately DROPPED from scope (team decision); the unused
-`stocks.logo_filename` column stays in the schema, always NULL.
+This folder (`StockTradingApp`) is the real build. It began from the first prototype (buy AND sell on
+SQLite, demo user, no login) and has since been moved to MySQL and extended. Done: MySQL switch, buy/sell
+tests, login + signup + logout with customer/admin roles, cash deposit/withdraw + Financial Records page
+(includes transaction history), admin tools (create/edit stock with optional logo upload, weekly hours,
+manual override; routes in `app/routes/admin.py`, rules in `app/services/admin.py`, image checks in
+`app/services/uploads.py`, logos stored in `instance/uploads/logos` and served by `app/routes/media.py`).
+Logo upload is an explicit SAD Administrator Requirement (it was briefly removed, then restored).
 Price generator done: `app/services/pricing.py` + `flask --app app run-price-generator` (`app/cli.py`). It is
 the ONLY writer of a price after creation (`db.update_stock_price`); tests/test_price_rules.py enforces this.
 Remaining work, in order: trade modal (Buy/Sell selector + live total), AWS deployment (run the generator
-as its own service, e.g. systemd, next to gunicorn), then the 9-5 seed switch.
+as its own service, e.g. systemd, next to gunicorn; uploaded logos need a persistent folder or S3), then
+the 9-5 seed switch.
 Auth notes: `app/routes/auth.py` loads `g.current_user` each request; guard blueprints with
-`require_role(...)` in a `before_request`. Tests: `client` = logged-in trainee1, `admin_client`, `anon_client`. Claude Code is the builder from here; Kiro is no longer used on this folder.
+`require_role(...)` in a `before_request`. Tests: `client` = logged-in trainee1, `admin_client`, `anon_client`.
+All development happens in this folder; the prototype folder is not edited.

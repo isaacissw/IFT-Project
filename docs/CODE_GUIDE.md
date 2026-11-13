@@ -47,7 +47,8 @@ can be tested without a web browser, and all the SQL can be checked for safety i
 - `auth.py`: log in, sign up, log out, and the `require_role()` guard that protects pages.
 - `trading.py`: customer dashboard, trade page, buy/sell review/confirm/cancel.
 - `cash.py`: Financial Records page, deposit/withdraw review/confirm/cancel.
-- `admin.py`: administrator dashboard, create/edit stock, market hours, override.
+- `admin.py`: administrator dashboard, create/edit stock (with optional logo), market hours, override.
+- `media.py`: serves the uploaded company logos (only files the app itself created).
 
 **`app/services/`** (the rules)
 - `auth.py`: signup rules, password hashing, login check.
@@ -55,7 +56,9 @@ can be tested without a web browser, and all the SQL can be checked for safety i
 - `cash.py`: deposit and withdrawal rules.
 - `market.py`: "is the market open right now?"
 - `admin.py`: stock creation/editing rules, market-hours rules.
-- `pricing.py`: the random price generator.
+- `pricing.py`: the random price generator. Its comments walk through the logic step by step,
+  with worked number examples; start there if prices are confusing.
+- `uploads.py`: checks that an uploaded logo really is a small image, and stores it safely.
 - `portfolio.py`: portfolio value (sum of shares x price).
 
 **Other**
@@ -109,6 +112,8 @@ Selling, depositing and withdrawing follow exactly the same review, confirm or c
 - **Jinja template.** An HTML file with placeholders: `{{ cash_balance | money }}` shows the
   cash formatted as money. Jinja escapes text automatically, so typed-in HTML can't run as code.
 - **Basis point (bps).** One hundredth of a percent. 50 bps = 0.5%. Used by the price generator.
+- **File signature.** The first few bytes of a file that identify its real type (every PNG starts with
+  the same bytes). Logo uploads are checked this way, never by their file name.
 
 ## 6. Where to change things
 
@@ -121,6 +126,7 @@ Selling, depositing and withdrawing follow exactly the same review, confirm or c
 | change or add SQL | `app/db.py` only |
 | change the demo data or market hours default | `seed.py`, then run `init-db` |
 | change how fast prices move | `.env`: `PRICE_TICK_SECONDS`, `PRICE_MAX_STEP_BPS` |
+| change the logo size or allowed image types | `app/services/uploads.py` |
 
 ## 7. Reading the tests
 

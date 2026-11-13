@@ -82,10 +82,11 @@ MySQL Server must be running. Press the Windows key, type **Services**, open it,
 
 9. **Try the administrator tools:** log out, then log in as `admin` (password = `SEED_ADMIN_PASSWORD`).
    - **Create New Stock:** fill in name, ticker (1-5 letters), shares and initial price; the
-     description is optional. Click **Submit New Stock**: it appears in **Stock Inventory** and, after
-     you log back in as a customer, on the trading dashboard.
-   - **Edit** (in the inventory table): change name, description or shares. The ticker and the price
-     cannot be changed.
+     description and **company logo** are optional (PNG/JPEG/GIF/WebP up to 1 MB; SVG and other files
+     are refused). Click **Submit New Stock**: it appears in **Stock Inventory** with its logo and,
+     after you log back in as a customer, on the trading dashboard.
+   - **Edit** (in the inventory table): change name, description, shares or the logo. The ticker and
+     the price cannot be changed.
    - **Market Hours:** pick **Force market CLOSED**, **Save Override**, then log in as `trainee1` and
      try a trade: "Market Closed". Set it back to **Automatic**. In **Weekly Schedule** you can set
      each day's opening/closing time or tick **Closed all day**, then **Save Hours**.

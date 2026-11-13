@@ -14,7 +14,8 @@
     <!-- ================= Create a stock ================= -->
     <section class="card">
       <h2>Create New Stock</h2>
-      <form method="post" action="{{ url_for('admin.create_stock') }}" class="auth-form" novalidate>
+      {# enctype="multipart/form-data" is required for any form that uploads a file. #}
+      <form method="post" action="{{ url_for('admin.create_stock') }}" enctype="multipart/form-data" class="auth-form" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <label for="company_name">Company Name</label>
@@ -38,6 +39,11 @@
         <label for="description">Description (optional)</label>
         <textarea id="description" name="description" rows="3">{{ stock_values.get('description', '') }}</textarea>
         {% if stock_errors.get('description') %}<p class="field-error">{{ stock_errors['description'] }}</p>{% endif %}
+
+        <label for="logo">Company Logo (optional)</label>
+        <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/gif,image/webp">
+        <p class="hint">PNG, JPEG, GIF or WebP, up to 1 MB.</p>
+        {% if stock_errors.get('logo') %}<p class="field-error">{{ stock_errors['logo'] }}</p>{% endif %}
 
         <button type="submit" class="btn btn-primary">Submit New Stock</button>
       </form>
@@ -98,7 +104,7 @@
       <tbody>
         {% for s in inventory %}
         <tr>
-          <td>{{ s.company_name }}</td>
+          <td>{% if s.logo_filename %}<img class="logo-thumb" src="{{ url_for('media.logo', filename=s.logo_filename) }}" alt="" width="24" height="24">{% endif %}{{ s.company_name }}</td>
           <td>{{ s.ticker_symbol }}</td>
           <td>{{ s.current_price | money }}</td>
           <td>{{ '{:,}'.format(s.company_shares_outstanding) }}</td>

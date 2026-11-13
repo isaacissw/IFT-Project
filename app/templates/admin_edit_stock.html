@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
-{# Edit a stock: name, shares outstanding, description. The ticker and price are shown but
-   cannot be edited (after creation only the price generator changes a price). #}
+{# Edit a stock: name, shares outstanding, description and logo. The ticker and price are shown
+   but cannot be edited (after creation only the price generator changes a price). #}
 {% block title %}Edit {{ stock.ticker_symbol }} - Stock Trading System{% endblock %}
 {% block content %}
 <div class="card auth-card">
@@ -8,9 +8,13 @@
   <dl class="facts">
     <dt>Ticker</dt><dd>{{ stock.ticker_symbol }} (cannot be changed)</dd>
     <dt>Current Price</dt><dd>{{ stock.current_price | money }} (set by the market, not editable)</dd>
+    {% if stock.logo_filename %}
+    <dt>Logo</dt><dd><img class="logo-thumb" src="{{ url_for('media.logo', filename=stock.logo_filename) }}" alt="Current logo" width="48" height="48"></dd>
+    {% endif %}
   </dl>
 
-  <form method="post" action="{{ url_for('admin.edit_stock', stock_id=stock.stock_id) }}" class="auth-form" novalidate>
+  {# enctype="multipart/form-data" is required for any form that uploads a file. #}
+  <form method="post" action="{{ url_for('admin.edit_stock', stock_id=stock.stock_id) }}" enctype="multipart/form-data" class="auth-form" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <label for="company_name">Company Name</label>
@@ -24,6 +28,11 @@
     <label for="description">Description (optional)</label>
     <textarea id="description" name="description" rows="3">{{ values.get('description', '') }}</textarea>
     {% if errors.get('description') %}<p class="field-error">{{ errors['description'] }}</p>{% endif %}
+
+    <label for="logo">Replace Logo (optional)</label>
+    <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/gif,image/webp">
+    <p class="hint">Leave empty to keep the current logo. PNG, JPEG, GIF or WebP, up to 1 MB.</p>
+    {% if errors.get('logo') %}<p class="field-error">{{ errors['logo'] }}</p>{% endif %}
 
     <button type="submit" class="btn btn-primary">Save Changes</button>
     <a class="btn btn-secondary" href="{{ url_for('admin.dashboard') }}">Back</a>

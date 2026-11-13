@@ -51,7 +51,7 @@ def db_conn(monkeypatch):
 
 
 @pytest.fixture
-def app(monkeypatch):
+def app(monkeypatch, tmp_path):
     """A Flask app from ``create_app()`` pointed at the seeded MySQL test database.
 
     CSRF stays ENABLED by default -- only a specific test that needs to bypass
@@ -84,7 +84,10 @@ def app(monkeypatch):
         TESTING=True,
         # CSRF is ENABLED by default (WTF_CSRF_ENABLED left True).
         DATABASE_URL=database_url,
+        # Uploaded logos go to a throwaway folder, never the real instance/ one.
+        UPLOAD_FOLDER=str(tmp_path / "logos"),
     )
+    (tmp_path / "logos").mkdir(exist_ok=True)
 
     return flask_app
 

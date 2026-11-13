@@ -954,19 +954,19 @@ def get_stock_by_ticker(conn, ticker_symbol):
     return cur.fetchone()
 
 
-def update_stock_details(conn, stock_id, company_name, description, shares_outstanding):
+def update_stock_details(conn, stock_id, company_name, description, logo_filename, shares_outstanding):
     """Change a stock's editable details. There is deliberately no price parameter.
 
-    ``description`` may be None. The ticker symbol and the price are never
-    changed here.
+    ``description`` and ``logo_filename`` may be None. The ticker symbol and the
+    price are never changed here.
     """
     conn.execute(
         """
         UPDATE stocks
-        SET company_name = ?, description = ?, company_shares_outstanding = ?
+        SET company_name = ?, description = ?, logo_filename = ?, company_shares_outstanding = ?
         WHERE stock_id = ?
         """,
-        (company_name, description, shares_outstanding, stock_id),
+        (company_name, description, logo_filename, shares_outstanding, stock_id),
     )
 
 
@@ -1021,7 +1021,13 @@ def set_market_override(conn, override_mode, updated_by, updated_at):
 
 
 def update_stock_price(conn, stock_id, new_price, updated_at):
-    """Set a stock's new market price (a Decimal computed in Python) and stamp when it changed."""
+    """Set a stock's new market price (a Decimal computed in Python) and stamp when it changed.
+
+    Called once per stock per round by ``tick()`` in app/services/pricing.py,
+    inside a transaction that has already locked this stock's row. The new price
+    is worked out in Python (``next_price``); SQL only stores it. ``updated_at``
+    becomes ``price_updated_at``, the "Price Updated" column on the dashboard.
+    """
     conn.execute(
         "UPDATE stocks SET current_price = ?, price_updated_at = ? WHERE stock_id = ?",
         (new_price, _ts(updated_at), stock_id),

@@ -13,7 +13,7 @@
       <tbody>
         {% for s in stocks %}
         <tr>
-          <td>{{ s.company_name }}</td>
+          <td>{% if s.logo_filename %}<img class="logo-thumb" src="{{ url_for('media.logo', filename=s.logo_filename) }}" alt="" width="24" height="24">{% endif %}{{ s.company_name }}</td>
           <td>{{ s.ticker_symbol }}</td>
           <td>{{ s.current_price | money }}</td>
           <td>{{ s.price_updated_at | et_datetime(tz_name) }}</td>

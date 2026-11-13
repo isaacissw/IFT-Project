@@ -1,5 +1,7 @@
-"""Route tests for the administrator pages (CSRF on, real forms)."""
+"""Route tests for the administrator pages (CSRF on, real forms, real file uploads)."""
 
+import io
+import os
 import re
 from decimal import Decimal
 
@@ -9,6 +11,8 @@ from app import db
 from dbhelpers import ADMIN_PASSWORD, CUSTOMER_PASSWORD, snapshot, stock_id, test_database_url, trainee_id
 
 D = Decimal
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
 
 
 def _token(client, path="/admin/"):
@@ -30,9 +34,12 @@ def _stock_form(token, **overrides):
     return data
 
 
-def _create(admin_client, **overrides):
+def _create(admin_client, logo=None, **overrides):
+    """Submit the Create New Stock form; ``logo`` is an optional (filename, bytes) upload."""
     data = _stock_form(_token(admin_client), **overrides)
-    return admin_client.post("/admin/stocks", data=data)
+    if logo is not None:
+        data["logo"] = (io.BytesIO(logo[1]), logo[0])
+    return admin_client.post("/admin/stocks", data=data, content_type="multipart/form-data")
 
 
 # ---------------------------- access control ---------------------------------
@@ -96,11 +103,62 @@ def test_create_stock_end_to_end(admin_client, client, conn):
     assert "Acme Rockets" in client.get("/").get_data(as_text=True)
 
 
-def test_duplicate_ticker_shows_an_error(admin_client, conn):
+def test_duplicate_ticker_shows_an_error_and_leaves_no_orphan_logo(admin_client, app, conn):
     before = snapshot(conn)
-    response = _create(admin_client, ticker="SSOL")
+    response = _create(admin_client, logo=("logo.png", PNG), ticker="SSOL")
     assert response.status_code == 400
     assert "A stock with that ticker already exists." in response.get_data(as_text=True)
+    assert snapshot(conn) == before
+    assert os.listdir(app.config["UPLOAD_FOLDER"]) == []  # the saved logo was cleaned up
+
+
+def test_create_stock_with_a_logo_stores_and_serves_it(admin_client, client, app, conn):
+    _create(admin_client, logo=("logo.png", PNG))
+    name = db.get_stock_by_ticker(conn, "ACME")["logo_filename"]
+    assert re.match(r"^[0-9a-f]{32}\.png$", name)  # random name, not "logo.png"
+    assert os.path.exists(os.path.join(app.config["UPLOAD_FOLDER"], name))
+
+    response = client.get(f"/media/logos/{name}")  # customers can see logos too
+    assert response.status_code == 200 and response.data == PNG
+    assert response.headers["Content-Type"] == "image/png"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert name in client.get("/").get_data(as_text=True)  # shown on the customer dashboard
+
+
+def test_the_uploaded_file_name_is_never_used(admin_client, app, conn):
+    _create(admin_client, logo=("../../../evil.png", PNG))
+    name = db.get_stock_by_ticker(conn, "ACME")["logo_filename"]
+    assert "evil" not in name and ".." not in name
+    assert os.listdir(app.config["UPLOAD_FOLDER"]) == [name]
+
+
+# Each case builds its bytes when the test runs (keeps the 1 MB case out of the test's name).
+_BAD_LOGOS = {
+    "svg_pretending_to_be_png": ("logo.png", lambda: b"<svg><script>alert(1)</script></svg>"),
+    "real_svg": ("logo.svg", lambda: b"<svg xmlns='http://www.w3.org/2000/svg'/>"),
+    "text_pretending_to_be_jpg": ("logo.jpg", lambda: b"not an image at all"),
+    "windows_program": ("logo.png", lambda: b"MZ" + b"\x00" * 100),
+    "png_over_1mb": ("logo.png", lambda: PNG + b"\x00" * (1024 * 1024)),
+}
+
+
+@pytest.mark.parametrize("case", list(_BAD_LOGOS))
+def test_bad_logo_is_refused_and_nothing_is_created(admin_client, app, conn, case):
+    filename, make_data = _BAD_LOGOS[case]
+    before = snapshot(conn)
+    response = _create(admin_client, logo=(filename, make_data()))
+    assert response.status_code == 400
+    html = response.get_data(as_text=True)
+    assert "PNG, JPEG, GIF or WebP" in html or "1 MB" in html
+    assert 'value="Acme Rockets"' in html  # what was typed is kept
+    assert snapshot(conn) == before
+    assert os.listdir(app.config["UPLOAD_FOLDER"]) == []
+
+
+def test_a_request_over_the_size_limit_is_rejected(admin_client, conn):
+    before = snapshot(conn)
+    response = _create(admin_client, logo=("big.png", PNG + b"\x00" * (3 * 1024 * 1024)))
+    assert response.status_code == 413
     assert snapshot(conn) == before
 
 
@@ -183,6 +241,37 @@ def test_editing_a_missing_stock_is_a_404(admin_client):
     assert admin_client.post("/admin/stocks/999999/edit", data=data).status_code == 404
 
 
+def test_replacing_a_logo_deletes_the_old_file(admin_client, app, conn):
+    _create(admin_client, logo=("a.png", PNG))
+    first = db.get_stock_by_ticker(conn, "ACME")
+    data = {"csrf_token": _token(admin_client), "company_name": "Acme Rockets", "shares": "5000", "description": "",
+            "logo": (io.BytesIO(JPEG), "b.jpg")}
+    admin_client.post(f"/admin/stocks/{first['stock_id']}/edit", data=data, content_type="multipart/form-data")
+    second = db.get_stock_by_ticker(conn, "ACME")["logo_filename"]
+    assert second != first["logo_filename"] and second.endswith(".jpg")
+    assert os.listdir(app.config["UPLOAD_FOLDER"]) == [second]
+
+
+def test_editing_without_a_new_logo_keeps_the_old_one(admin_client, conn):
+    _create(admin_client, logo=("a.png", PNG))
+    stock = db.get_stock_by_ticker(conn, "ACME")
+    data = {"csrf_token": _token(admin_client), "company_name": "Acme Renamed", "shares": "5000", "description": ""}
+    admin_client.post(f"/admin/stocks/{stock['stock_id']}/edit", data=data, content_type="multipart/form-data")
+    assert db.get_stock_by_ticker(conn, "ACME")["logo_filename"] == stock["logo_filename"]
+
+
+def test_a_bad_replacement_logo_changes_nothing(admin_client, app, conn):
+    _create(admin_client, logo=("a.png", PNG))
+    stock = db.get_stock_by_ticker(conn, "ACME")
+    before = snapshot(conn)
+    data = {"csrf_token": _token(admin_client), "company_name": "Changed Name", "shares": "5000", "description": "",
+            "logo": (io.BytesIO(b"<svg><script>alert(1)</script></svg>"), "x.png")}
+    response = admin_client.post(f"/admin/stocks/{stock['stock_id']}/edit", data=data, content_type="multipart/form-data")
+    assert response.status_code == 400 and "PNG, JPEG, GIF or WebP" in response.get_data(as_text=True)
+    assert snapshot(conn) == before  # not even the name changed
+    assert os.listdir(app.config["UPLOAD_FOLDER"]) == [stock["logo_filename"]]
+
+
 # ---------------------------- market controls ----------------------------------
 
 
@@ -249,3 +338,15 @@ def test_forcing_the_market_closed_stops_customers_trading(admin_client, client,
     admin_client.post("/admin/market/override", data={"csrf_token": _token(admin_client), "mode": "none"})
     response = client.post("/trade/buy/review", data={"csrf_token": token, "stock_id": ssol, "quantity": "1"})
     assert "Confirm Your Purchase" in response.get_data(as_text=True)
+
+
+# ---------------------------- logo route safety ----------------------------------
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/media/logos/../../.env", "/media/logos/..%2F..%2F.env", "/media/logos/notahash.png", "/media/logos/" + "a" * 32 + ".svg",
+     "/media/logos/" + "a" * 32 + ".png"],  # well-formed name but no such file
+)
+def test_the_logo_route_only_serves_files_it_created(client, path):
+    assert client.get(path).status_code == 404

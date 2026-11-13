@@ -6,7 +6,7 @@ stocks are simulated. Built with Flask, Jinja2 and MySQL 8.
 
 Currently built: signup, login and logout (customer and administrator roles), buy and sell
 flows, cash deposits and withdrawals with a Financial Records page (balance and transaction
-history), administrator tools (create/edit stocks, weekly market hours, manual
+history), administrator tools (create/edit stocks with optional company logos, weekly market hours, manual
 open/close override), the random price generator (`flask --app app run-price-generator`),
 dashboard, market-hours check, and the full database schema. See `docs/` for the SAD and the project rules.
 

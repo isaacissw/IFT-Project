@@ -1,10 +1,20 @@
-﻿---
-inclusion: always
----
+﻿# Project Rules — Stock Trading System
 
-# Project Rules — Stock Trading System (Standing Context)
-
-> This file is the standing context (Block A) for the Stock Trading System. It applies to every phase and every spec. It is set to always be included.
+> **What this file is.** These are the engineering rules the first version of the app was built to,
+> written before any code existed. They explain WHY the code is shaped the way it is: all SQL in one
+> file (`app/db.py`), money as exact `Decimal`, every multi-step change in one database transaction,
+> business rules in `app/services/` with no web code, and so on. Those rules still apply.
+>
+> **What is out of date.** The project has moved on since this was written:
+> - **Database:** the rules below describe SQLite for local work. The app now uses **MySQL 8 everywhere**
+>   (team decision), so the SQLite-specific details (`BEGIN IMMEDIATE`, text-stored money, `PRAGMA`)
+>   were replaced by MySQL equivalents (`START TRANSACTION` + `SELECT ... FOR UPDATE` row locks).
+> - **Users:** "Phase 1" used a fixed demo customer with no login. Real signup/login with customer and
+>   administrator roles now exists; the demo user code is gone.
+> - **"Phases":** the phase-by-phase plan below was the original build order. Current status and the
+>   remaining work are in `CLAUDE.md`; proof of what was built is in `docs/VERIFICATION.md`.
+>
+> For a plain-language tour of the code itself, read `docs/CODE_GUIDE.md`.
 
 ## Project: Stock Trading System (standing context)
 

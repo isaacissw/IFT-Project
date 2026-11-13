@@ -1,5 +1,20 @@
 # Verification record
 
+## Company logo upload restored (SAD Administrator Requirement)
+
+- The SAD explicitly requires "upload a company logo image during stock creation", so the feature that
+  was removed for scope was restored with the same safety design: the file's content (its signature
+  bytes) decides whether it is a PNG/JPEG/GIF/WebP image; SVG and everything else is refused; max 1 MB
+  (request limit 2 MB, HTTP 413 above that); stored under a random name (the uploaded name is never
+  used); only names the app generated are served, with a `nosniff` header; an image saved for a stock
+  that then fails to be created is deleted again; a replaced logo's old file is deleted after the
+  change succeeds; an edit with a bad replacement image changes nothing.
+- Logos show next to the company name on the customer dashboard, the admin inventory and the edit page.
+- `pytest -q` -> 485 passed (454 earlier + 31 logo tests restored).
+- Also in this change: every mention of the earlier AI tool was replaced with context explaining the
+  project's history; `docs/project-rules.md` now starts with a note on which of its rules still apply;
+  the price generator (`app/services/pricing.py`, `app/cli.py`) is annotated step by step with worked
+  examples. No program logic changed in the generator.
 ## Random price generator (SAD process map #8)
 
 - `pytest -q` -> 454 passed (392 earlier + 62 new: `test_pricing.py`, `test_price_rules.py`,

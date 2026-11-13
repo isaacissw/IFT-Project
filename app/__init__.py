@@ -9,6 +9,8 @@ command, and registering the 404 handler and the template filters.
 Who is logged in is worked out per request in ``app/routes/auth.py``.
 """
 
+import os
+
 import click
 from flask import Flask, current_app, g
 from flask.cli import with_appcontext
@@ -20,6 +22,7 @@ from . import db as db_module
 from .routes.admin import bp as admin_bp
 from .routes.auth import bp as auth_bp
 from .routes.cash import bp as cash_bp
+from .routes.media import bp as media_bp
 from .routes.trading import bp as trading_bp
 
 # One CSRF extension instance, initialised against the app inside create_app().
@@ -48,6 +51,13 @@ def create_app(config_object=Config):
     # CSRF protection, so every POST form must carry a valid token.
     csrf.init_app(app)
 
+    # Uploaded company logos are stored in instance/uploads/logos (the instance/
+    # folder is not committed to git). MAX_CONTENT_LENGTH makes Flask refuse any
+    # request body over 2 MB before reading it (the logo itself may be up to 1 MB).
+    app.config.setdefault("UPLOAD_FOLDER", os.path.join(app.instance_path, "uploads", "logos"))
+    app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+
 
     # The database is MySQL, reached through DATABASE_URL (see .env). Every
     # request opens its own connection through app/db.py.
@@ -56,6 +66,7 @@ def create_app(config_object=Config):
     app.register_blueprint(trading_bp)
     app.register_blueprint(cash_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(media_bp)
     app.cli.add_command(init_db_command)
     app.cli.add_command(run_price_generator_command)
 
@@ -63,6 +74,11 @@ def create_app(config_object=Config):
     def _not_found(error):
         # Routes that abort(404, "Stock not found.") get that message shown.
         return error.description or "Not Found", 404
+
+    @app.errorhandler(413)
+    def _too_large(error):
+        # 413 = "Payload Too Large": the request was over MAX_CONTENT_LENGTH.
+        return "That upload is too large (the limit is 2 MB).", 413
 
     @app.context_processor
     def _inject_current_user():
