@@ -73,9 +73,8 @@ def create_app(config_object=Config):
     # 8. Register the 404 handler.
     @app.errorhandler(404)
     def _not_found(error):
-        # The message body is intentionally minimal here; routes that need the
-        # "Stock not found." text abort with their own message in task 8.1.
-        return "Not Found", 404
+        # Routes that abort(404, "Stock not found.") get that message shown.
+        return error.description or "Not Found", 404
 
     # Jinja filters used by the templates.
     from app.money import format_money as _format_money

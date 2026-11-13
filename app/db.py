@@ -179,8 +179,15 @@ def transaction(conn):
     try:
         yield conn
         conn.execute("COMMIT")
-    except Exception:
-        conn.execute("ROLLBACK")
+    except Exception as exc:
+        # Normally any error undoes everything. One exception: an error that
+        # sets ``keep_changes = True`` (PriceChangedError) means "the work done
+        # so far, deleting the stale pending order, is intentional, so save it
+        # and then report the error".
+        if getattr(exc, "keep_changes", False):
+            conn.execute("COMMIT")
+        else:
+            conn.execute("ROLLBACK")
         raise
 
 

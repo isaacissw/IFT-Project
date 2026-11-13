@@ -1,5 +1,18 @@
 # Verification record
 
+## Test coverage added (buy, sell, rollback, routes, CSRF, SQL safety)
+
+- `pytest -q` -> 112 passed (38 earlier + 74 new) against the MySQL test database.
+- New files: `test_trading_buy.py`, `test_trading_sell.py`, `test_rollback.py`,
+  `test_routes.py`, `test_sql_safety.py`, `test_sql_injection.py`.
+- Bug found by these tests and fixed: when the price changed between review and confirm,
+  the stale pending order was supposed to be deleted, but the transaction rollback undid
+  the delete. `PriceChangedError` now carries `keep_changes = True` so `db.transaction()`
+  commits the delete before the error is raised.
+- Also fixed: the 404 page now shows `Stock not found.` as the requirements specify.
+- Known gap (not yet fixed): after a price-change error on confirm the user lands on the
+  dashboard rather than the trade page, because the confirm form does not send the stock id.
+
 ## MySQL migration (SQLite -> MySQL 8.0)
 
 Commands run on a fresh database and the real results:

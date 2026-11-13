@@ -74,7 +74,13 @@ class PriceChangedError(Exception):
     Carries the ``ticker`` and the ``old`` and ``new`` prices (both
     :class:`~decimal.Decimal`) so the route can format
     "The price of TICKER changed from $A to $B. Please review your order again.".
+
+    ``keep_changes`` tells ``db.transaction()`` to COMMIT (not roll back) when
+    this error is raised: just before raising it, confirm deletes the stale
+    pending order, and that delete must be saved or the old order would linger.
     """
+
+    keep_changes = True
 
     def __init__(self, ticker: str, old: Decimal, new: Decimal):
         self.ticker = ticker
