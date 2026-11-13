@@ -18,6 +18,7 @@ from .config import Config
 from . import db as db_module
 from .routes.admin import bp as admin_bp
 from .routes.auth import bp as auth_bp
+from .routes.cash import bp as cash_bp
 from .routes.trading import bp as trading_bp
 
 # One CSRF extension instance, initialised against the app inside create_app().
@@ -51,6 +52,7 @@ def create_app(config_object=Config):
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(trading_bp)
+    app.register_blueprint(cash_bp)
     app.register_blueprint(admin_bp)
     app.cli.add_command(init_db_command)
 

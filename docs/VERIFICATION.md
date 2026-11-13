@@ -1,5 +1,24 @@
 # Verification record
 
+## Cash deposits and withdrawals (Financial Records page)
+
+- `pytest -q` -> 294 passed (187 earlier + 107 new: `test_cash.py`, `test_cash_routes.py`,
+  `test_concurrency.py`).
+- Rules: amount is a plain positive number with at most 2 decimals (rejects 0, negatives, 1.234,
+  1e3, $5, 1,000, text); a deposit is limited to $1,000,000.00 and the balance can never exceed
+  $99,999,999.99; a withdrawal cannot exceed the balance ("Insufficient Funds", re-checked at
+  confirm); a review/confirm step as with trades; a confirmed cash transaction can never be
+  cancelled; every cash event is timestamped; cash works at any hour (not tied to market hours).
+- Safety: confirm runs in one locked transaction with a rollback on any failure. Two simultaneous
+  confirms (double-click, two withdrawals spending the same money, two buyers of the last shares)
+  are tested with real parallel connections. Mutation check: with the row locks removed, 5 of the 7
+  concurrency tests fail (lost update 900.00 vs 1150.00, oversold shares), so the tests do catch races.
+- Real browser run: new account $0.00 -> deposit 1000.50 -> over-withdrawal 5000 refused ->
+  withdraw 200.25 -> balance 800.25, both rows in the history with timestamps.
+- Also: the Financial Records page shows the full executed-transaction history (latest 100), so the
+  "view history of transactions" requirement is met; filtering/paging can come later.
+- Hardening: cancelling a pending buy/sell now also checks the transaction type.
+
 ## Login, signup and logout
 
 - `pytest -q` -> 187 passed (119 earlier + 68 new in `tests/test_auth.py`, plus updated route tests).

@@ -57,10 +57,10 @@
         {% for t in recent %}
         <tr>
           <td>{{ t['executed_at'] | et_datetime(tz_name) }}</td>
-          <td>{{ t['ticker_symbol'] }}</td>
+          <td>{{ t['ticker_symbol'] or '—' }}</td>
           <td>{{ t['transaction_type'] }}</td>
-          <td>{{ t['quantity'] }}</td>
-          <td>{{ t['price_per_share'] | money }}</td>
+          <td>{{ t['quantity'] if t['quantity'] is not none else '—' }}</td>
+          <td>{{ (t['price_per_share'] | money) if t['price_per_share'] is not none else '—' }}</td>
           <td>{{ t['total_amount'] | money }}</td>
         </tr>
         {% endfor %}

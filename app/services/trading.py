@@ -422,6 +422,7 @@ def cancel_pending_buy(conn, user_id, transaction_id):
     if (
         tx is None
         or tx["user_id"] != user_id
+        or tx["transaction_type"] != "buy"
         or tx["status"] != "pending"
     ):
         return
@@ -600,6 +601,7 @@ def cancel_pending_sell(conn, user_id, transaction_id):
     if (
         tx is None
         or tx["user_id"] != user_id
+        or tx["transaction_type"] != "sell"
         or tx["status"] != "pending"
     ):
         return

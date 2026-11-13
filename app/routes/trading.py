@@ -27,6 +27,7 @@ from app.clock import now_utc
 from app.money import format_money, to_money
 from app.routes.auth import require_role
 from app.services import trading
+from app.services.portfolio import portfolio_value
 from app.services.trading import (
     InsufficientFundsError,
     InsufficientSharesError,
@@ -64,12 +65,7 @@ def _open_db():
     return db.get_connection(current_app.config["DATABASE_URL"])
 
 
-def _portfolio_value(holdings):
-    """Sum quantity * current_price across holdings, as a Decimal."""
-    total = Decimal("0.00")
-    for h in holdings:
-        total += to_money(h["current_price"]) * int(h["quantity"])
-    return total
+_portfolio_value = portfolio_value  # shared with the Financial Records page
 
 
 @bp.route("/")

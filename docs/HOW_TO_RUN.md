@@ -72,7 +72,15 @@ MySQL Server must be running. Press the Windows key, type **Services**, open it,
    - On the review screen, click **Cancel** instead of Confirm: `Order cancelled.` and
      nothing is charged.
 
-8. **Stop the server:** click in the terminal and press **Ctrl+C**.
+8. **Try cash** (any customer): click **Financial Records** in the top bar.
+   - Deposit: type `250.50` under *Deposit Cash*, **Review Deposit**, **Confirm Transaction**.
+     You see `Deposited $250.50...`, the new balance, and a row in **Transaction History**.
+   - Withdraw: type an amount larger than your balance: **Insufficient Funds**. Type a smaller
+     one and confirm it: the balance goes down and a `withdrawal` row appears.
+   - Amounts like `0`, `-5`, `1.234` or `abc` are rejected with a message.
+   - A brand-new account (from **Create an account**) starts at `$0.00`: deposit first, then trade.
+
+9. **Stop the server:** click in the terminal and press **Ctrl+C**.
 
 ## C. Look at the data in MySQL Workbench
 

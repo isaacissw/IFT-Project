@@ -9,6 +9,12 @@
 <body>
   <nav class="topnav">
     <span class="brand">Stock Trading System</span>
+    {% if current_user and current_user.user_type == 'customer' %}
+    <span class="nav-links">
+      <a href="{{ url_for('trading.dashboard') }}">Dashboard</a>
+      <a href="{{ url_for('cash.records') }}">Financial Records</a>
+    </span>
+    {% endif %}
     <span class="nav-stats">
       {% if current_user and current_user.user_type == 'customer' %}
       <span class="stat">Cash Balance: <strong>{{ cash_balance | money }}</strong></span>

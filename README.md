@@ -5,7 +5,8 @@ Customers buy and sell simulated stocks with a review-then-confirm flow; all mon
 stocks are simulated. Built with Flask, Jinja2 and MySQL 8.
 
 Currently built: signup, login and logout (customer and administrator roles), buy and sell
-flows, dashboard, market-hours check (with override), and the full database schema. See `docs/` for the SAD and the project rules.
+flows, cash deposits and withdrawals with a Financial Records page (balance and transaction
+history), dashboard, market-hours check (with override), and the full database schema. See `docs/` for the SAD and the project rules.
 
 ## Requirements
 

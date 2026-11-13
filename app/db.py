@@ -880,6 +880,38 @@ def insert_pending_sell(
     return cur.lastrowid
 
 
+# ---------------------------------------------------------------------------
+# Cash deposit / withdrawal write function
+#
+# Cash transactions reuse the same pending -> confirmed -> executed life cycle
+# as trades, and the same confirm-path helpers above (get_transaction_for_update,
+# guarded_confirm_update, update_user_cash, set_transaction_executed,
+# delete_pending_transaction). Only the INSERT is different: a cash row has no
+# stock, quantity or price (the table's CHECK constraint requires them NULL).
+# ---------------------------------------------------------------------------
+
+
+def insert_pending_cash(conn, user_id, transaction_type, amount, created_at):
+    """Insert one pending ``deposit`` or ``withdrawal`` row and return its new id.
+
+    ``transaction_type`` is 'deposit' or 'withdrawal' (passed as a value, so it
+    is a ``?`` placeholder like everything else). ``amount`` is a Decimal
+    already validated in Python; ``created_at`` is an ISO-8601 string.
+    """
+    cur = conn.execute(
+        """
+        INSERT INTO transactions (
+            user_id, stock_id, transaction_type, quantity,
+            price_per_share, total_amount, status,
+            created_at, confirmed_at, executed_at
+        )
+        VALUES (?, NULL, ?, NULL, NULL, ?, 'pending', ?, NULL, NULL)
+        """,
+        (user_id, transaction_type, amount, _ts(created_at)),
+    )
+    return cur.lastrowid
+
+
 def reduce_holding(conn, user_id, stock_id, quantity, now):
     """Decrease a user's holding of a stock by ``quantity`` shares.
 

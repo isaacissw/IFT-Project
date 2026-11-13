@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Confirm {{ noun }} - Stock Trading System{% endblock %}
+{% block content %}
+<div class="card confirm-card">
+  <h2>Confirm Your {{ noun }}</h2>
+  <dl class="facts">
+    <dt>Amount</dt><dd>{{ amount | money }}</dd>
+    <dt>Cash Balance Now</dt><dd>{{ balance_before | money }}</dd>
+    <dt>Cash Balance After</dt><dd>{{ balance_after | money }}</dd>
+  </dl>
+  <p class="notice">Once confirmed, this transaction cannot be cancelled.</p>
+  <div class="confirm-actions">
+    <form method="post" action="{{ url_for('cash.confirm', url_kind=url_kind) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="transaction_id" value="{{ transaction_id }}">
+      <button type="submit" class="btn btn-primary">Confirm Transaction</button>
+    </form>
+    <form method="post" action="{{ url_for('cash.cancel', url_kind=url_kind) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="transaction_id" value="{{ transaction_id }}">
+      <button type="submit" class="btn btn-secondary">Cancel</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
