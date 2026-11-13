@@ -8,8 +8,15 @@ being replaced by MySQL. Kiro's original files stay in `C:\Users\sjr_c\Documents
 
 ## About the user
 Student, not a strong programmer. Build ONE feature at a time, explain changes briefly in plain
-language, and add short "why" comments only in tricky spots (transactions, Decimal, locking).
-Stop and summarize after each feature; wait for approval before the next one.
+language. Stop and summarize after each feature; wait for approval before the next one.
+
+## Comments and annotations (user request: keep the code annotated as it changes)
+- Every Python file starts with a plain-language docstring saying what the file does and how it fits.
+- Every template starts with a `{# ... #}` comment saying what the page is and what fills it.
+- Comment the WHY in tricky spots (transactions, locks, Decimal, security) in plain English, no jargon
+  or planning references (no "task 4.1", "Requirement 6.2").
+- When you change code, update its comments AND docs/CODE_GUIDE.md in the same change.
+- Brand colors are CSS variables at the top of app/static/css/style.css (ASU Maroon #8C1D40, Gold #FFC627).
 
 ## Stack (fixed)
 Python 3.14, Flask 3 app factory + Blueprints, Jinja2 templates, plain CSS/JS (no frameworks, no ORM,

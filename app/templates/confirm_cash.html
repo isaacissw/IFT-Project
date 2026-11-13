@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{# Confirmation screen for a cash deposit or withdrawal. Same idea as confirm.html: the request is
+   saved as PENDING; Confirm applies it, Cancel deletes it. #}
 {% block title %}Confirm {{ noun }} - Stock Trading System{% endblock %}
 {% block content %}
 <div class="card confirm-card">

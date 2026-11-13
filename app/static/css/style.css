@@ -1,28 +1,77 @@
+/* ===========================================================================
+   Stylesheet for the whole site.
+
+   Colors are defined ONCE here as "CSS variables" and used everywhere below as
+   var(--name). To change the look, change these values only.
+   The brand colors are Arizona State University's official Maroon and Gold.
+   =========================================================================== */
+:root {
+  --asu-maroon: #8C1D40;       /* ASU Maroon: top bar, main buttons, links */
+  --asu-maroon-dark: #6E1632;  /* darker maroon for hover */
+  --asu-gold: #FFC627;         /* ASU Gold: accent stripe and keyboard focus ring */
+  --text: #1f2933;             /* normal text */
+  --text-muted: #5c6670;       /* labels, hints, table headings */
+  --page-bg: #f5f4f2;          /* page background (warm light gray) */
+  --card-bg: #ffffff;
+  --border: #e2e0dd;
+  --input-border: #c9c5c0;
+}
+
+/* ---------- Page basics ---------- */
 * { box-sizing: border-box; }
-body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #f4f6f8; color: #1f2933; }
-.topnav { display: flex; justify-content: space-between; align-items: center; background: #1f3a5f; color: #fff; padding: 0.9rem 1.5rem; }
+body { font-family: system-ui, Arial, sans-serif; margin: 0; background: var(--page-bg); color: var(--text); }
+a { color: var(--asu-maroon); }
+/* Visible gold outline when moving through the page with the keyboard (accessibility). */
+:focus-visible { outline: 3px solid var(--asu-gold); outline-offset: 2px; }
+
+/* ---------- Top bar (in base.html) ---------- */
+.topnav { display: flex; justify-content: space-between; align-items: center; background: var(--asu-maroon); color: #fff; padding: 0.9rem 1.5rem; border-bottom: 4px solid var(--asu-gold); }
 .brand { font-weight: 700; font-size: 1.1rem; }
 .nav-stats .stat { margin-left: 1.5rem; }
+.nav-links a { color: #fff; margin-left: 1.25rem; text-decoration: none; }
+.nav-links a:hover { text-decoration: underline; }
+.logout-form { display: inline; margin-left: 1rem; }
+
+/* ---------- Layout: page width, white "cards", grids ---------- */
 .container { max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem; }
 .grid { display: grid; gap: 1.25rem; }
-.card { background: #fff; border-radius: 10px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.card h2 { margin-top: 0; font-size: 1.15rem; }
+.card { background: var(--card-bg); border-radius: 10px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.card h2 { margin-top: 0; font-size: 1.15rem; color: var(--asu-maroon); }
+.cash-forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
+.admin-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.25rem; align-items: start; }
+
+/* ---------- Tables ---------- */
 .data-table { width: 100%; border-collapse: collapse; }
-.data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #e4e7eb; }
-.data-table th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: .03em; color: #627d98; }
-.empty { color: #829ab1; font-style: italic; }
+.data-table th, .data-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+.data-table th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); }
+.empty { color: var(--text-muted); font-style: italic; }
+
+/* ---------- Buttons ---------- */
 .btn { display: inline-block; padding: 0.4rem 0.9rem; border-radius: 6px; border: none; cursor: pointer; text-decoration: none; font-size: 0.9rem; }
-.btn-primary, .trade-btn { background: #2b6cb0; color: #fff; }
-.btn-secondary { background: #e2e8f0; color: #1f2933; }
-.btn-primary:hover, .trade-btn:hover { background: #245a94; }
+.btn-primary, .trade-btn { background: var(--asu-maroon); color: #fff; }
+.btn-primary:hover, .trade-btn:hover { background: var(--asu-maroon-dark); }
+.btn-secondary { background: #ebe8e4; color: var(--text); }
+.btn-secondary:hover { background: #dedad5; }
+
+/* ---------- "Label: value" lists (trade and confirm pages) ---------- */
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.25rem; }
-.facts dt { color: #627d98; }
+.facts dt { color: var(--text-muted); }
 .facts dd { margin: 0; font-weight: 600; }
-.trade-form label { display: block; margin: 1rem 0 0.25rem; font-weight: 600; }
-.trade-form input[type=number] { padding: 0.45rem; width: 12rem; border: 1px solid #cbd2d9; border-radius: 6px; }
+
+/* ---------- Forms ---------- */
+.trade-form label, .auth-form label { display: block; margin: 1rem 0 0.25rem; font-weight: 600; }
+.trade-form input[type=number] { padding: 0.45rem; width: 12rem; max-width: 100%; border: 1px solid var(--input-border); border-radius: 6px; }
+.auth-form input[type=text], .auth-form input[type=email], .auth-form input[type=password],
+.auth-form input[type=number] { padding: 0.5rem; width: 100%; border: 1px solid var(--input-border); border-radius: 6px; font-size: 1rem; background: #fff; }
+.auth-form textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--input-border); border-radius: 6px; font: inherit; }
+.auth-form button { margin-top: 1.25rem; }
+.auth-card { max-width: 440px; margin: 0 auto; }
+.auth-alt { margin-top: 1.25rem; }
+.hint { margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--text-muted); }
 .estimate { margin: 0.75rem 0; font-size: 1.05rem; }
-.notice { background: #fffbea; border: 1px solid #f0d98c; padding: 0.6rem 0.8rem; border-radius: 6px; }
 .confirm-actions { display: flex; gap: 0.75rem; margin-top: 1rem; }
+
+/* ---------- Messages: success (green) and errors (red) stay green/red so their meaning is obvious ---------- */
 .flashes { margin-bottom: 1rem; }
 .flash { padding: 0.6rem 0.9rem; border-radius: 6px; margin-bottom: 0.5rem; }
 .flash-success { background: #e3f9e5; border: 1px solid #94d3a2; color: #1b4332; }
@@ -30,32 +79,20 @@ body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #f4f6f8
 .error-box { background: #ffe3e3; border: 1px solid #f0a0a0; border-radius: 6px; padding: 0.7rem 0.9rem; margin-bottom: 1rem; }
 .error-heading { color: #7a1f1f; display: block; }
 .error-body { margin: 0.25rem 0 0; }
-/* Navigation links and cash forms */
-.nav-links a { color: #fff; margin-left: 1.25rem; text-decoration: none; }
-.nav-links a:hover { text-decoration: underline; }
-.cash-forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
-.trade-form input[type=number] { max-width: 100%; }
-/* Administrator pages */
-.admin-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.25rem; align-items: start; }
-.auth-form textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd2d9; border-radius: 6px; font: inherit; }
-.auth-form input[type=number] { padding: 0.5rem; width: 100%; border: 1px solid #cbd2d9; border-radius: 6px; font-size: 1rem; background: #fff; }
+.field-error { margin: 0.25rem 0 0; font-size: 0.9rem; color: #7a1f1f; font-weight: 600; }
+/* Yellow "Once confirmed, this transaction cannot be cancelled." notice */
+.notice { background: #fff8e1; border: 1px solid var(--asu-gold); padding: 0.6rem 0.8rem; border-radius: 6px; }
+
+/* ---------- Administrator pages ---------- */
 .market-status { font-size: 1.05rem; }
 .status-open { color: #1b7a3a; }
 .status-closed { color: #a12020; }
-.override-form fieldset { border: 1px solid #d9e2ec; border-radius: 6px; margin: 0.75rem 0; }
+.override-form fieldset { border: 1px solid var(--border); border-radius: 6px; margin: 0.75rem 0; }
 .override-form label { display: block; margin: 0.35rem 0; font-weight: 400; }
-.hours-table input[type=time] { padding: 0.25rem; border: 1px solid #cbd2d9; border-radius: 4px; }
+.hours-table input[type=time] { padding: 0.25rem; border: 1px solid var(--input-border); border-radius: 4px; }
 .schedule-form button { margin-top: 0.75rem; }
-/* Login / signup / logout */
-.logout-form { display: inline; margin-left: 1rem; }
-.auth-card { max-width: 440px; margin: 0 auto; }
-.auth-form label { display: block; margin: 1rem 0 0.25rem; font-weight: 600; }
-.auth-form input[type=text], .auth-form input[type=email], .auth-form input[type=password] { padding: 0.5rem; width: 100%; border: 1px solid #cbd2d9; border-radius: 6px; font-size: 1rem; }
-.auth-form button { margin-top: 1.25rem; }
-.hint { margin: 0.25rem 0 0; font-size: 0.85rem; color: #627d98; }
-.field-error { margin: 0.25rem 0 0; font-size: 0.9rem; color: #7a1f1f; font-weight: 600; }
-.auth-alt { margin-top: 1.25rem; }
-/* Modal overlay (JS enhancement; hidden by default, works without JS as a link) */
+
+/* ---------- Pop-up overlay (reserved for the upcoming trade modal) ---------- */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
 .modal-overlay[hidden] { display: none; }
 .modal-panel { background: #fff; border-radius: 10px; padding: 1.5rem; max-width: 460px; width: 90%; }

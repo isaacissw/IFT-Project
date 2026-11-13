@@ -1,14 +1,27 @@
-"""Trading service.
+"""Trading service: the rules for buying and selling stock.
 
-This module defines the typed exception hierarchy used by the buy flow and
-(in later tasks) the buy operations: ``parse_quantity``, ``quote_buy``,
-``create_pending_buy``, ``confirm_buy``, and ``cancel_pending_buy``, along with
-the ``Quote`` dataclass.
+Each trade happens in three steps, matching the SAD's "confirmation prompt
+before any transaction is fulfilled" rule:
 
-Only the exception classes and the pure helpers ``parse_quantity`` and
-``compute_total_cost`` are implemented here (tasks 6.1 and 6.3). The remaining
-function bodies are implemented in later tasks. This module performs no Flask
-imports; all money-valued attributes are :class:`decimal.Decimal`.
+  1. REVIEW   (``create_pending_buy`` / ``create_pending_sell``): check the order
+     and save it as a *pending* transaction. No money or shares move yet. The
+     review screen shows the cost.
+  2. CONFIRM  (``confirm_buy`` / ``confirm_sell``): inside one locked database
+     transaction, check EVERYTHING again (the price, the market, the cash, the
+     shares, because time has passed since the review), then move the money and
+     the shares and mark the order executed. All of it happens, or none of it.
+  3. or CANCEL (``cancel_pending_buy`` / ``cancel_pending_sell``): delete the
+     pending order. Confirmed orders can never be cancelled.
+
+The checks always run in the same order, and the first one that fails is the
+error the customer sees:
+  stock exists -> quantity is a whole number -> market open ->
+  enough shares (available to buy, or owned to sell) -> enough cash (buys).
+
+When a check fails, the service raises one of the error classes below. The
+route (app/routes/trading.py) catches it and shows the matching message.
+
+No Flask imports. All money is :class:`decimal.Decimal`, never float.
 """
 
 from dataclasses import dataclass
@@ -158,12 +171,11 @@ class Quote:
     purely a calculation: it writes nothing to the database. All money-valued
     fields are :class:`~decimal.Decimal`.
 
-    Fields (order matters; see design.md "Quote return shape"):
+    Fields:
 
       - ``stock``: the stock row as a plain ``dict`` of its columns
         (``stock_id``, ``ticker_symbol``, ``company_name``, ``current_price``,
-        ...). The :class:`sqlite3.Row` is converted to a dict so the quote is a
-        self-contained, immutable snapshot.
+        ...), copied so the quote is a self-contained snapshot.
       - ``quantity``: the whole-share count being priced (``int``).
       - ``price_per_share``: the stock's current price as a Decimal.
       - ``total_cost``: ``quantize(price_per_share * quantity)``.
@@ -180,7 +192,7 @@ class Quote:
 
 
 def _validate_buy(conn, user_id, stock_id, quantity, now, tz_name):
-    """Run the shared buy validations in the fixed order (Requirement 13.1).
+    """Run the shared buy checks in the fixed order; the first failure is raised.
 
     Both :func:`quote_buy` and (later) ``create_pending_buy`` call this so they
     enforce exactly the same rules, in exactly the same sequence, and raise the
@@ -204,9 +216,8 @@ def _validate_buy(conn, user_id, stock_id, quantity, now, tz_name):
          :class:`InsufficientFundsError`.
 
     Returns a tuple ``(stock, user, total, cash_before)`` so callers can build a
-    quote or a pending row without re-reading. ``stock`` is the raw
-    :class:`sqlite3.Row`; ``cash_before`` and ``total`` are
-    :class:`~decimal.Decimal`.
+    quote or a pending row without re-reading. ``stock`` is the stock row (a
+    dict); ``cash_before`` and ``total`` are :class:`~decimal.Decimal`.
     """
     # 1) Stock exists.
     stock = db.get_stock(conn, stock_id)
@@ -431,7 +442,7 @@ def cancel_pending_buy(conn, user_id, transaction_id):
 
 
 # ---------------------------------------------------------------------------
-# Sell flow (Phase 4) -- mirrors the buy flow above.
+# Sell flow -- mirrors the buy flow above.
 #
 # Validation order for a sell:
 #   1. Stock exists           -> ValidationError("Stock not found.")

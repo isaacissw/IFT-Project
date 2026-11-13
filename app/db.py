@@ -260,13 +260,18 @@ def clear_all_rows(conn):
         conn.execute(statement)
 
 # ---------------------------------------------------------------------------
-# Named read query functions (task 4.1)
+# READ functions: look things up, change nothing.
 #
-# Every VALUE below is passed with a ``?`` placeholder; no value is ever
-# concatenated, f-string-interpolated, %-formatted, or .format()-ed into SQL.
-# Money columns are declared DECIMAL(10,2) and come back as Decimal via the
-# adapter/converter registered above. All of these are pure reads and are safe
-# to call standalone (outside an open transaction).
+# How every query in this file protects against SQL injection:
+#   The SQL text is always a fixed string with ``?`` marks where values go, and
+#   the values are handed over separately as a tuple, e.g.
+#       conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+#   The database driver inserts each value safely, so even text like
+#   "1; DROP TABLE users" is treated as plain data, never as SQL. We NEVER glue
+#   values into the SQL text ourselves (no f-strings, no +, no % formatting).
+#
+# Money columns are DECIMAL(10,2) in MySQL and come back as Python Decimal
+# objects, which are exact (no floating-point rounding errors).
 # ---------------------------------------------------------------------------
 
 
@@ -292,7 +297,10 @@ def get_user_by_id(conn, user_id, for_update=False):
 
 
 def get_user_by_username(conn, username):
-    """Return one user row by username, or None. Used to resolve the demo user."""
+    """Return one user row by username, or None. Used by login and signup.
+
+    MySQL compares usernames case-insensitively, so "Trainee1" finds "trainee1".
+    """
     cur = conn.execute(
         "SELECT * FROM users WHERE username = ?",
         (username,),
@@ -340,9 +348,10 @@ def list_stocks(conn):
 def get_shares_held_sum(conn, stock_id):
     """Return the total shares of a stock held across all users.
 
-    This is ``SUM(holdings.quantity)`` for the given stock and drives the
-    Shares_Available calculation. SQLite returns NULL when there are no
-    matching rows, so we coalesce to 0 and return a plain int.
+    "Shares available to buy" is never stored; it is always worked out as
+    company_shares_outstanding - (this total). Buying moves shares out of the
+    available pool and selling puts them back automatically. SUM() gives NULL
+    when nobody holds the stock, so COALESCE turns that into 0.
     """
     cur = conn.execute(
         "SELECT COALESCE(SUM(quantity), 0) AS held FROM holdings WHERE stock_id = ?",
@@ -450,11 +459,12 @@ def get_schedule_for_day(conn, day_of_week):
     return cur.fetchone()
 
 
-# The only table names count_rows will accept. This set is hard-coded here and
-# never comes from user input, so interpolating a member of it into the SQL is
-# safe. A table name is an identifier, not a value, so it cannot be a ``?``
-# placeholder -- this is the one allowed identifier interpolation (per the
-# standing rules and design.md).
+# The only table names count_rows will accept. A table NAME cannot be a ``?``
+# placeholder (placeholders are only for values), so count_rows has to put the
+# name into the SQL text itself. That is safe ONLY because the name must first
+# match this fixed list, which never comes from user input. It is the one place
+# in the project where anything is inserted into SQL text, and the SQL-safety
+# test (tests/test_sql_safety.py) allows exactly this one exception.
 _COUNT_ROWS_WHITELIST = frozenset(
     {"users", "stocks", "holdings", "transactions", "market_schedule", "market_settings"}
 )
@@ -477,22 +487,19 @@ def count_rows(conn, table):
     return int(row["n"])
 
 # ---------------------------------------------------------------------------
-# Named INSERT helper functions for seeding (task 4.2)
+# INSERT functions for new users, stocks and market settings.
 #
-# These are the dedicated write helpers the seed loader (seed.py) calls. All
-# SQL stays here in app/db.py; seed.py never touches a cursor or writes SQL.
-# Every value is passed with a ``?`` placeholder -- nothing is concatenated,
-# f-string-interpolated, %-formatted, or .format()-ed into SQL.
+# Used by seed.py (the demo data), by signup (insert_user) and by the admin
+# "Create New Stock" form (insert_stock).
 #
-# Money/price arguments are expected to arrive as Decimal (built from strings
-# by the caller); the Decimal adapter registered above writes them as text.
-# Timestamp arguments are expected to be ISO-8601 strings (now_utc().isoformat()
-# at the caller) and market hour arguments as 'HH:MM:SS' strings. These helpers
-# do not compute money and do not call now() -- the caller owns those values so
-# the single clock source stays in app/clock.py.
-#
-# Seeding runs inside the caller's transaction; these helpers issue a single
-# INSERT each and (where a generated id is useful) return the new row id.
+# What the callers pass in:
+#   * money/prices as Decimal (exact),
+#   * timestamps as ISO-8601 text such as "2026-03-02T15:00:00+00:00";
+#     _ts() converts them to the format MySQL stores,
+#   * market hours as "HH:MM:SS" text.
+# These functions never do money math and never read the clock themselves;
+# the caller decides those values. Each one runs a single INSERT and returns
+# the new row's id where that is useful.
 # ---------------------------------------------------------------------------
 
 
@@ -642,21 +649,19 @@ def insert_market_settings(
     )
 
 # ---------------------------------------------------------------------------
-# Pending-buy write query function (task 6.7)
+# Every order goes through three statuses in the transactions table:
 #
-# This is the single INSERT the trading service calls to record a pending buy
-# order (create_pending_buy). It is safe to call standalone -- one INSERT, no
-# accompanying read/update -- and does not open its own transaction.
+#   pending   -> written when the customer clicks "Review Order". Nothing has
+#                happened to their money or shares yet. Cancel deletes it.
+#   confirmed -> set the moment they click "Confirm Transaction".
+#   executed  -> set right after, once cash and shares have actually moved.
 #
-# Safety rules enforced here mirror the rest of the module:
-#   - Every VALUE is passed with a ``?`` placeholder; nothing is concatenated,
-#     f-string-interpolated, %-formatted, or .format()-ed into SQL.
-#   - No money arithmetic happens in SQL. ``price_per_share`` and
-#     ``total_amount`` arrive as Decimals already computed/validated in Python
-#     by the caller and are written as text via the registered adapter.
-#   - ``created_at`` arrives as an ISO-8601 string (the caller passes
-#     ``now.isoformat()``); ``confirmed_at`` and ``executed_at`` are written as
-#     NULL because a pending order has not yet been confirmed or executed.
+# confirmed and executed happen inside the same database transaction, so from
+# the outside an order is either still pending or fully done. Once a row is
+# confirmed/executed nothing in this file can change or delete it (the SAD's
+# "confirmed transactions cannot be cancelled" rule).
+#
+# insert_pending_buy is step 1 for a purchase: one INSERT, no money moved.
 # ---------------------------------------------------------------------------
 
 
@@ -672,11 +677,10 @@ def insert_pending_buy(
     """Insert one pending ``buy`` transactions row and return its new id.
 
     Writes a single ``transactions`` row with ``transaction_type='buy'`` and
-    ``status='pending'``, the quoted ``price_per_share`` and ``total_amount``
-    (both Decimals, written as text via the registered adapter),
-    ``created_at`` (an ISO-8601 string), and ``confirmed_at``/``executed_at``
-    NULL (a pending order has not been confirmed or executed yet). Returns
-    ``cursor.lastrowid`` -- the new ``transaction_id``.
+    ``status='pending'``, the reviewed ``price_per_share`` and ``total_amount``
+    (Decimals), ``created_at``, and ``confirmed_at``/``executed_at`` left empty
+    (NULL) because nothing has been confirmed yet. Returns the new
+    ``transaction_id`` (MySQL's auto-numbered id, via ``cursor.lastrowid``).
     """
     cur = conn.execute(
         """
@@ -699,28 +703,19 @@ def insert_pending_buy(
     return cur.lastrowid
 
 # ---------------------------------------------------------------------------
-# Confirm-path write query functions (task 6.8)
+# CONFIRM functions: the writes that actually move money and shares.
 #
-# These are the writes used by the atomic buy-confirm algorithm (confirm_buy,
-# task 6.10). Unless noted, they are designed to be called INSIDE an already
-# open ``transaction()`` (the caller opens ``BEGIN IMMEDIATE``); they do NOT
-# open their own transaction. ``delete_pending_transaction`` is also safe to
-# call standalone for cancel.
+# The services (trading.py, cash.py) call these INSIDE one ``transaction()``,
+# so they all succeed together or are all undone together. They do not start
+# their own transaction.
 #
-# Safety rules enforced here:
-#   - Every VALUE is passed with a ``?`` placeholder; nothing is concatenated,
-#     f-string-interpolated, %-formatted, or .format()-ed into SQL.
-#   - No money arithmetic happens in SQL. ``new_balance`` arrives as a Decimal
-#     already computed in Python by the caller and is written as text via the
-#     registered adapter. Holding quantity math (integer, not money) is also
-#     done in Python in ``upsert_holding`` to keep a single clear seam.
-#   - Timestamps arrive as ISO-8601 strings (the caller passes
-#     ``now.isoformat()``); these helpers accept them as given and never call
-#     a clock.
-#   - The audit trail is immutable: ``guarded_confirm_update`` and
-#     ``delete_pending_transaction`` are scoped to ``status='pending'`` so they
-#     physically cannot touch a ``confirmed``/``executed`` row, and no function
-#     here mutates the financial fields of an audited transaction.
+# Rules they follow:
+#   * The new cash balance is calculated in Python with Decimal and then
+#     written; SQL never does the arithmetic. (Exact, and easy to read.)
+#   * guarded_confirm_update and delete_pending_transaction only ever touch
+#     rows that are still 'pending', so a confirmed/executed transaction can
+#     never be changed or deleted by mistake.
+#   * delete_pending_transaction is also used on its own by "Cancel".
 # ---------------------------------------------------------------------------
 
 
@@ -767,9 +762,8 @@ def update_user_cash(conn, user_id, new_balance, updated_at):
     """Write a Python-computed new cash balance for one user.
 
     ``new_balance`` is a Decimal the caller already computed in Python (e.g.
-    ``cash_balance - total_amount``); no arithmetic happens in SQL. It is
-    written as text via the registered Decimal adapter. ``updated_at`` is an
-    ISO-8601 string supplied by the caller.
+    ``cash_balance - total_amount``); no arithmetic happens in SQL.
+    ``updated_at`` is an ISO-8601 string supplied by the caller.
     """
     conn.execute(
         "UPDATE users SET cash_balance = ?, updated_at = ? WHERE user_id = ?",
@@ -786,9 +780,9 @@ def upsert_holding(conn, user_id, stock_id, quantity, now):
     holdings row with the given ``quantity`` and ``created_at = updated_at =
     now``. ``now`` is an ISO-8601 string supplied by the caller.
 
-    Reading current-then-writing (rather than an arithmetic UPDATE in SQL)
-    keeps a single, readable seam that the rollback test monkeypatches. Kept as
-    one named function for exactly that reason.
+    ("Upsert" = update if it exists, insert if it doesn't.) The rollback test
+    deliberately breaks this function mid-purchase to prove the whole purchase
+    is undone, which is why it is kept as one separate named function.
     """
     now = _ts(now)
     existing = get_holding(conn, user_id, stock_id)
@@ -837,15 +831,13 @@ def delete_pending_transaction(conn, transaction_id):
 
 
 # ---------------------------------------------------------------------------
-# Sell-path write query functions (Phase 4)
+# SELL functions: the mirror image of the buy functions above.
 #
-# These mirror the buy-path helpers. insert_pending_sell records a pending sell
-# order; reduce_holding decreases a user's holding quantity and deletes the row
-# when it reaches zero (shares then return to inventory automatically because
-# availability is derived = company_shares_outstanding - SUM(holdings.quantity)).
-# Same safety rules: ? placeholders only, no money math in SQL, timestamps are
-# ISO-8601 strings supplied by the caller, and these run inside the caller's
-# open transaction() on the confirm path.
+# insert_pending_sell records the reviewed sell order (status 'pending').
+# reduce_holding takes shares out of the customer's holding; when they sell
+# their last share the holding row is deleted. The shares go back into the
+# "available to buy" pool automatically, because that number is always
+# calculated as shares_outstanding minus everything customers hold.
 # ---------------------------------------------------------------------------
 
 
@@ -862,7 +854,7 @@ def insert_pending_sell(
 
     Writes a single ``transactions`` row with ``transaction_type='sell'`` and
     ``status='pending'``, the quoted ``price_per_share`` and ``total_amount``
-    (the proceeds, both Decimals written as text via the adapter),
+    (the proceeds, both Decimals),
     ``created_at`` (ISO-8601 string), and ``confirmed_at``/``executed_at`` NULL.
     Returns ``cursor.lastrowid`` -- the new ``transaction_id``.
     """

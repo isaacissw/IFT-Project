@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{# Edit a stock: name, shares outstanding, description. The ticker and price are shown but
+   cannot be edited (after creation only the price generator changes a price). #}
 {% block title %}Edit {{ stock.ticker_symbol }} - Stock Trading System{% endblock %}
 {% block content %}
 <div class="card auth-card">

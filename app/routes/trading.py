@@ -1,8 +1,17 @@
-"""Trading blueprint: the dashboard and the buy flow.
+"""Trading blueprint: the customer dashboard and the buy / sell pages.
 
-Routes are deliberately thin. Each one parses request input, calls exactly one
-service function, and then renders a template or issues a redirect. No SQL and
-no business rules live here -- those are in app/db.py and app/services/*.
+URL map (what each web address does):
+  GET  /                   the Customer Trading Dashboard
+  GET  /trade/<stock_id>   the trade page for one stock (?mode=sell for selling)
+  POST /trade/buy/review   "Review Order"  -> save a pending buy, show confirm page
+  POST /trade/buy/confirm  "Confirm"       -> execute it, back to the dashboard
+  POST /trade/buy/cancel   "Cancel"        -> discard the pending buy
+  (the same three for /trade/sell/...)
+
+Routes are deliberately thin. Each one reads the form, calls the service that
+holds the rules (app/services/trading.py), and then shows a page or redirects.
+No SQL and no business rules live here -- those are in app/db.py and app/services/.
+A "blueprint" is just Flask's name for a group of related routes.
 
 The current user's identity always comes from the server-side session (see
 app/routes/auth.py), never from a form field or URL parameter.
@@ -182,18 +191,24 @@ def _render_trade_error(stock_id, quantity, heading, body, mode="buy"):
 
 @bp.route("/trade/buy/review", methods=["POST"])
 def buy_review():
-    """Validate input, create a pending buy, and show the confirmation screen."""
+    """Validate input, create a pending buy, and show the confirmation screen.
+
+    This runs when the customer clicks "Review Order". Nothing is bought yet:
+    the order is saved as *pending* and the confirm page is shown.
+    """
+    # Who is buying always comes from the login session, never from the form.
     user_id = get_current_user_id()
     raw_stock_id = request.form.get("stock_id", "")
     raw_quantity = request.form.get("quantity", "")
 
-    # stock_id must be a plain integer; a bad id is a 404 (not found).
+    # stock_id must be a plain integer; anything else is "not found" (404).
     try:
         stock_id = int(raw_stock_id)
     except (TypeError, ValueError):
         abort(404, "Stock not found.")
 
-    # Parse quantity first so we can retain the raw input on error.
+    # Check the quantity is a whole number 1..1,000,000. On a bad value we show
+    # the trade page again with an error AND the text the customer typed.
     try:
         quantity = trading.parse_quantity(raw_quantity)
     except ValidationError as err:
@@ -201,12 +216,15 @@ def buy_review():
 
     conn = _open_db()
     try:
+        # Save the pending order (this also runs every buy rule) ...
         tx_id = trading.create_pending_buy(
             conn, user_id, stock_id, quantity, now_utc(), _tz_name()
         )
+        # ... and work out the numbers the confirm page shows (cost, cash after).
         quote = trading.quote_buy(
             conn, user_id, stock_id, quantity, now_utc(), _tz_name()
         )
+    # Each kind of rule failure gets its own heading and message on the page.
     except ValidationError as err:
         conn.close()
         if str(err) == "Stock not found.":
@@ -251,7 +269,13 @@ def buy_review():
 
 @bp.route("/trade/buy/confirm", methods=["POST"])
 def buy_confirm():
-    """Confirm (execute) a pending buy, then redirect to the dashboard."""
+    """Confirm (execute) a pending buy, then redirect to the dashboard.
+
+    This runs when the customer clicks "Confirm Transaction". The service
+    re-checks everything and moves the money and shares in one all-or-nothing
+    step. Afterwards we REDIRECT (Post-Redirect-Get) instead of showing a page
+    directly, so pressing the browser's refresh button cannot buy twice.
+    """
     user_id = get_current_user_id()
     raw_tx = request.form.get("transaction_id", "")
     raw_stock_id = request.form.get("stock_id", "")
@@ -263,8 +287,9 @@ def buy_confirm():
 
     conn = _open_db()
     try:
-        # Capture details for the success flash before the row is gone from view.
+        # Read the order first so we can word the success message afterwards.
         tx = db.get_transaction_for_update(conn, tx_id)
+        # The real work: re-check and execute (raises an error if anything fails).
         trading.confirm_buy(conn, user_id, tx_id, now_utc(), _tz_name())
         ticker = None
         if tx is not None and tx["stock_id"] is not None:

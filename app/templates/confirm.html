@@ -1,4 +1,7 @@
 {% extends 'base.html' %}
+{# Confirmation screen for a buy or sell (the SAD's 'confirmation prompt before a transaction is
+   fulfilled'). The order is already saved as PENDING; Confirm executes it, Cancel deletes it. Both
+   forms send the pending transaction_id. #}
 {% block content %}
 <div class="card confirm-card">
   {% set is_sell = (mode == 'sell') %}

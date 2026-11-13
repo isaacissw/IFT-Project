@@ -1,3 +1,7 @@
+{# Shared frame for every page: the top bar (links, cash and portfolio value for customers,
+   the Log out button), the area where flash messages appear, and a "content" block that each
+   page fills in. Every form in the app includes a hidden csrf_token: a secret value tied to the
+   visitor's session that proves the form really came from this site (blocks forged requests). #}
 <!DOCTYPE html>
 <html lang="en">
 <head>

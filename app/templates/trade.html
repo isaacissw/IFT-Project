@@ -1,4 +1,7 @@
 {% extends 'base.html' %}
+{# Trade page for one stock. The Buy/Sell buttons switch modes (?mode=sell). The quantity form
+   posts to the Review step. static/js/trade.js shows a live 'Estimated Total' while typing; that
+   number is only a preview - the server always recalculates the real total. #}
 {% block content %}
 <div class="card trade-card">
   <h2>Trade {{ company_name }} ({{ ticker_symbol }})</h2>

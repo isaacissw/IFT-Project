@@ -123,7 +123,10 @@ _SUMMARY_TABLES = (
 def init_db_command():
     """Drop and recreate the database, seed it, then print per-table counts.
 
-    Steps (design "Database Initialization and Seeding", Requirement 4.1):
+    Run with ``flask --app app init-db``. WARNING: this wipes all data in the
+    database named in DATABASE_URL and starts over with the demo data.
+
+    Steps:
 
       1. Connect to the MySQL database named in DATABASE_URL (the database
          itself must already exist; create it once in MySQL Workbench).
@@ -149,10 +152,8 @@ def init_db_command():
         db_module.drop_all_tables(conn)
         db_module.init_db(conn)
 
-        # 4. Seed inside one all-or-nothing transaction so the rows persist
-        #    together in the file. get_connection uses isolation_level=None, so
-        #    wrapping the inserts in transaction() (BEGIN IMMEDIATE ... COMMIT)
-        #    is what commits them.
+        # 4. Insert the demo data inside one all-or-nothing transaction: if any
+        #    insert fails, none of the demo rows are kept.
         with db_module.transaction(conn):
             seed_into(conn)
 

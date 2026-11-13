@@ -1,7 +1,7 @@
-"""Seed loader: inserts the known Phase 1 demo data.
+"""Seed loader: fills a brand-new, empty database with the demo data.
 
-``seed_into(conn)`` populates a freshly created (schema-only) database with the
-fixed demo data described in the design:
+"Seeding" means putting starting data into a new database. ``flask --app app
+init-db`` builds the empty tables and then calls ``seed_into(conn)``, which adds:
 
   - one admin user (``admin`` / Ada Admin, cash 0.00),
   - one customer user (``trainee1`` / Taylor Trainee, cash 10000.00),
@@ -17,15 +17,14 @@ Design rules this file follows:
     named insert helpers there and never touches a cursor or connection
     directly (it does not call ``conn.execute``).
   - Money is ``Decimal`` built from strings (``Decimal("10000.00")``), never
-    float. ``app/db.py`` writes Decimal as text.
+    float, so amounts are exact.
   - Timestamps come from ``app.clock.now_utc()`` and are passed as ISO-8601
     strings via ``.isoformat()``.
-  - Passwords come ONLY from environment variables and are stored ONLY as the
-    Werkzeug hash. A missing env var raises a clear error; no default password
+  - Passwords come ONLY from environment variables (SEED_ADMIN_PASSWORD and
+    SEED_CUSTOMER_PASSWORD in .env) and are stored ONLY as a one-way hash
+    (Werkzeug's ``generate_password_hash``), so the real password is never in
+    the database. A missing setting raises a clear error; no default password
     is ever invented and no secret is printed.
-
-The ``init-db`` CLI command (task 4.3) calls ``seed_into(conn)`` inside a
-transaction after building the schema.
 """
 
 import os
@@ -37,10 +36,10 @@ from app import db
 from app.clock import now_utc
 
 
-# The six demo stocks, exactly as specified in requirements.md / design.md.
-# Prices and share counts are the fixed demo values. Prices are Decimal built
-# from strings so no float ever touches money. description/logo_filename are
-# NULL for every seeded stock.
+# The six demo stocks: (ticker, company name, shares outstanding, starting price).
+# They are chosen to make demos easy: SAGU has only 50 shares (try buying 51 to
+# see "Insufficient Shares") and GCNY costs more than the demo customer's
+# $10,000 (try buying 1 to see "Insufficient Funds").
 _SEED_STOCKS = (
     ("SSOL", "Sonoran Solar Corp", 1000000, Decimal("42.50")),
     ("DSRT", "Desert Data Systems", 500000, Decimal("128.75")),
@@ -79,7 +78,7 @@ def _require_env(name):
 
 
 def seed_into(conn):
-    """Insert all Phase 1 demo data into a schema-only database.
+    """Insert all the demo data into an empty (tables-only) database.
 
     Expects ``conn`` to already have the schema (``init_db`` was run). The
     caller is responsible for the transaction boundary (the init-db CLI wraps
